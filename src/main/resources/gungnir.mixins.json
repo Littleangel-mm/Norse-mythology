@@ -1,0 +1,16 @@
+{
+	"required": true,
+	"package": "com.gungnir.mixin",
+	"compatibilityLevel": "JAVA_17",
+	"mixins": [
+		"LivingEntityMixin",
+		"ThrownTridentAccessor",
+		"ThrownTridentMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}
