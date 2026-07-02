@@ -3,6 +3,7 @@ package com.gungnir.item;
 import com.gungnir.GungnirMod;
 import com.gungnir.GungnirTridentState;
 import com.gungnir.mixin.ThrownTridentAccessor;
+import java.util.List;
 import java.util.Map;
 
 import net.minecraft.ChatFormatting;
@@ -17,6 +18,7 @@ import net.minecraft.world.entity.projectile.ThrownTrident;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
@@ -80,6 +82,15 @@ public class GungnirItem extends TridentItem {
 	@Override
 	public Component getName(ItemStack stack) {
 		return super.getName(stack).copy().withStyle(ChatFormatting.GOLD);
+	}
+
+	@Override
+	public void appendHoverText(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag context) {
+		tooltip.add(Component.translatable("item.gungnir.gungnir.tooltip.1").withStyle(ChatFormatting.GOLD));
+		tooltip.add(Component.translatable("item.gungnir.gungnir.tooltip.2").withStyle(ChatFormatting.DARK_RED));
+		tooltip.add(Component.translatable("item.gungnir.gungnir.tooltip.3").withStyle(ChatFormatting.GRAY));
+		tooltip.add(Component.translatable("item.gungnir.gungnir.tooltip.4").withStyle(ChatFormatting.RED));
+		super.appendHoverText(stack, level, tooltip, context);
 	}
 
 	private static void ensureLoyalty(ItemStack stack) {

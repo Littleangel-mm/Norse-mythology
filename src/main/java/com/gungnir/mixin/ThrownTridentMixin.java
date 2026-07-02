@@ -1,11 +1,13 @@
 package com.gungnir.mixin;
 
 import com.gungnir.GungnirMod;
+import com.gungnir.GungnirLightning;
 import com.gungnir.GungnirTridentState;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
@@ -89,6 +91,9 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 		if (hitEntity instanceof LivingEntity livingEntity && hitEntity != this.getOwner()) {
 			livingEntity.addTag(GungnirMod.BLEEDING_TAG);
 			livingEntity.addEffect(new MobEffectInstance(GungnirMod.BLEEDING, BLEEDING_DURATION, 0, false, true, true));
+			if (this.level() instanceof ServerLevel serverLevel) {
+				GungnirLightning.strike(serverLevel, livingEntity);
+			}
 			gungnir$returnToOwnerNow();
 		}
 	}

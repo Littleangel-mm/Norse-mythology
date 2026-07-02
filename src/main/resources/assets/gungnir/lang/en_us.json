@@ -1,5 +1,9 @@
 {
 	"item.gungnir.gungnir": "Gungnir",
+	"item.gungnir.gungnir.tooltip.1": "It never misses. What it strikes must fall.",
+	"item.gungnir.gungnir.tooltip.2": "The eternal spear that lulls all beings into sleep.",
+	"item.gungnir.gungnir.tooltip.3": "Calls down crimson divine lightning on impact.",
+	"item.gungnir.gungnir.tooltip.4": "Inflicts a permanent bleeding effect.",
 	"item.gungnir.fenrir_spawn_egg": "Fenrir Spawn Egg",
 	"entity.gungnir.fenrir": "Fenrir",
 	"effect.gungnir.bleeding": "Bleeding"

@@ -1,5 +1,9 @@
 {
 	"item.gungnir.gungnir": "\u5188\u683c\u5c3c\u5c14",
+	"item.gungnir.gungnir.tooltip.1": "\u51fb\u5fc5\u4e2d\uff0c\u4e2d\u5fc5\u4ea1\u3002",
+	"item.gungnir.gungnir.tooltip.2": "\u6c38\u6052\u4e4b\u67aa\uff0c\u8ba9\u4f17\u751f\u6c89\u7761\u3002",
+	"item.gungnir.gungnir.tooltip.3": "\u547d\u4e2d\u65f6\u964d\u4e0b\u7ea2\u8272\u795e\u96f7\u3002",
+	"item.gungnir.gungnir.tooltip.4": "\u9020\u6210\u6c38\u4e45\u6027\u7684\u6d41\u8840\u6548\u679c\u3002",
 	"item.gungnir.fenrir_spawn_egg": "\u82ac\u91cc\u5c14\u602a\u7269\u86cb",
 	"entity.gungnir.fenrir": "\u82ac\u91cc\u5c14",
 	"effect.gungnir.bleeding": "\u6d41\u8840"
