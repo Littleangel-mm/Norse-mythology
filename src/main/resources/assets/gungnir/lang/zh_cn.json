@@ -1,4 +1,6 @@
 {
-	"item.gungnir.gungnir": "冈格尼尔",
-	"effect.gungnir.bleeding": "流血"
+	"item.gungnir.gungnir": "\u5188\u683c\u5c3c\u5c14",
+	"item.gungnir.fenrir_spawn_egg": "\u82ac\u91cc\u5c14\u602a\u7269\u86cb",
+	"entity.gungnir.fenrir": "\u82ac\u91cc\u5c14",
+	"effect.gungnir.bleeding": "\u6d41\u8840"
 }

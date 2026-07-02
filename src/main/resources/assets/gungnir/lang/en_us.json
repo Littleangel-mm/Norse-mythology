@@ -1,4 +1,6 @@
 {
 	"item.gungnir.gungnir": "Gungnir",
+	"item.gungnir.fenrir_spawn_egg": "Fenrir Spawn Egg",
+	"entity.gungnir.fenrir": "Fenrir",
 	"effect.gungnir.bleeding": "Bleeding"
 }
