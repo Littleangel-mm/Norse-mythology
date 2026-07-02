@@ -1,6 +1,7 @@
 package com.gungnir;
 
 import com.gungnir.effect.BleedingEffect;
+import com.gungnir.entity.EinherjarEntity;
 import com.gungnir.entity.FenrirEntity;
 import com.gungnir.item.GungnirItem;
 import net.fabricmc.api.ModInitializer;
@@ -41,6 +42,16 @@ public class GungnirMod implements ModInitializer {
 			.build()
 	);
 
+	public static final EntityType<EinherjarEntity> EINHERJAR = Registry.register(
+		BuiltInRegistries.ENTITY_TYPE,
+		id("einherjar"),
+		FabricEntityTypeBuilder.create(MobCategory.CREATURE, EinherjarEntity::new)
+			.dimensions(EntityDimensions.scalable(0.6F, 1.95F))
+			.trackRangeBlocks(64)
+			.trackedUpdateRate(3)
+			.build()
+	);
+
 	public static final Item GUNGNIR = Registry.register(
 		BuiltInRegistries.ITEM,
 		id("gungnir"),
@@ -53,12 +64,20 @@ public class GungnirMod implements ModInitializer {
 		new SpawnEggItem(FENRIR, 0x101014, 0xb81420, new Item.Properties())
 	);
 
+	public static final Item EINHERJAR_SPAWN_EGG = Registry.register(
+		BuiltInRegistries.ITEM,
+		id("einherjar_spawn_egg"),
+		new SpawnEggItem(EINHERJAR, 0x2f3545, 0xc7a45b, new Item.Properties())
+	);
+
 	@Override
 	public void onInitialize() {
 		FabricDefaultAttributeRegistry.register(FENRIR, FenrirEntity.createFenrirAttributes());
+		FabricDefaultAttributeRegistry.register(EINHERJAR, EinherjarEntity.createEinherjarAttributes());
 		ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.COMBAT).register(entries -> {
 			entries.accept(GUNGNIR);
 			entries.accept(FENRIR_SPAWN_EGG);
+			entries.accept(EINHERJAR_SPAWN_EGG);
 		});
 		LOGGER.info("Gungnir is ready.");
 	}

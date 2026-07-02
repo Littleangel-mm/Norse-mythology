@@ -12,8 +12,9 @@ import org.joml.Vector3f;
 public final class GungnirLightning {
 	private static final DustParticleOptions RED_LIGHTNING = new DustParticleOptions(new Vector3f(1.0F, 0.02F, 0.0F), 1.4F);
 	private static final float LIGHTNING_DAMAGE = 5.0F;
-	private static final int SEGMENTS = 9;
-	private static final int PARTICLES_PER_SEGMENT = 8;
+	private static final double STRIKE_HEIGHT = 32.0D;
+	private static final int SEGMENTS = 24;
+	private static final int PARTICLES_PER_SEGMENT = 9;
 
 	private GungnirLightning() {
 	}
@@ -24,7 +25,7 @@ public final class GungnirLightning {
 		}
 
 		Vec3 end = target.position().add(0.0D, target.getBbHeight() * 0.55D, 0.0D);
-		Vec3 start = end.add(0.0D, 8.0D, 0.0D);
+		Vec3 start = end.add(0.0D, STRIKE_HEIGHT, 0.0D);
 		RandomSource random = level.random;
 		Vec3 previous = start;
 

@@ -5,6 +5,8 @@
 	"item.gungnir.gungnir.tooltip.3": "Calls down crimson divine lightning on impact.",
 	"item.gungnir.gungnir.tooltip.4": "Inflicts a permanent bleeding effect.",
 	"item.gungnir.fenrir_spawn_egg": "Fenrir Spawn Egg",
+	"item.gungnir.einherjar_spawn_egg": "Einherjar Spawn Egg",
 	"entity.gungnir.fenrir": "Fenrir",
+	"entity.gungnir.einherjar": "Einherjar",
 	"effect.gungnir.bleeding": "Bleeding"
 }
