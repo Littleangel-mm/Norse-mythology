@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -46,7 +47,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.TieredItem;
 import net.minecraft.world.item.TridentItem;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.phys.Vec3;
@@ -116,6 +119,7 @@ public class EinherjarEntity extends PathfinderMob {
 			this.eatCooldown = EAT_INTERVAL;
 			eatIfNeeded();
 		}
+		supportNearbyGungnirPlayer();
 	}
 
 	private void pickUpUsefulItems() {
@@ -142,14 +146,13 @@ public class EinherjarEntity extends PathfinderMob {
 	}
 
 	private boolean tryEquipWeapon(ItemStack stack) {
-		if (weaponScore(stack) <= weaponScore(this.getMainHandItem())) {
+		if (!isWeapon(stack)) {
 			return false;
 		}
 
-		stashCurrentWeapon();
 		ItemStack newWeapon = stack.copy();
 		newWeapon.setCount(1);
-		this.setItemSlot(EquipmentSlot.MAINHAND, newWeapon);
+		this.weaponInventory.add(newWeapon);
 		selectBestWeapon();
 		return true;
 	}
@@ -311,13 +314,62 @@ public class EinherjarEntity extends PathfinderMob {
 			return false;
 		}
 		if (isWeapon(stack)) {
-			return weaponScore(stack) > weaponScore(this.getMainHandItem());
+			return true;
 		}
 		if (stack.getItem() instanceof ArmorItem armorItem) {
 			EquipmentSlot slot = armorItem.getEquipmentSlot();
 			return slot.getType() == EquipmentSlot.Type.ARMOR && armorScore(stack) > armorScore(this.getItemBySlot(slot));
 		}
 		return stack.getItem().isEdible();
+	}
+
+	private void supportNearbyGungnirPlayer() {
+		Player leader = findNearbyGungnirPlayer(32.0D);
+		if (leader == null) {
+			return;
+		}
+
+		LivingEntity sharedTarget = findSharedTarget(leader);
+		if (sharedTarget != null) {
+			this.setTarget(sharedTarget);
+		}
+
+		double distance = this.distanceToSqr(leader);
+		LivingEntity target = this.getTarget();
+		if ((target == null || !target.isAlive() || distance > 14.0D * 14.0D) && distance > 6.0D * 6.0D) {
+			this.getNavigation().moveTo(leader, 1.05D);
+		}
+	}
+
+	private Player findNearbyGungnirPlayer(double range) {
+		return this.level().getEntitiesOfClass(
+			Player.class,
+			this.getBoundingBox().inflate(range),
+			player -> player.isAlive() && hasGungnirInHand(player)
+		).stream().min((left, right) -> Double.compare(
+			left.distanceToSqr(this),
+			right.distanceToSqr(this)
+		)).orElse(null);
+	}
+
+	private LivingEntity findSharedTarget(Player player) {
+		LivingEntity attackedByPlayer = player.getLastHurtMob();
+		if (isValidSharedTarget(attackedByPlayer)) {
+			return attackedByPlayer;
+		}
+		LivingEntity attackingPlayer = player.getLastHurtByMob();
+		if (isValidSharedTarget(attackingPlayer)) {
+			return attackingPlayer;
+		}
+		return null;
+	}
+
+	private boolean isValidSharedTarget(LivingEntity target) {
+		return target != null
+			&& target.isAlive()
+			&& target instanceof Enemy
+			&& target != this
+			&& this.distanceToSqr(target) <= 48.0D * 48.0D;
 	}
 
 	private void stashCurrentWeapon() {
@@ -527,6 +579,7 @@ public class EinherjarEntity extends PathfinderMob {
 			ItemStack weapon = this.einherjar.getMainHandItem();
 			ItemStack thrownStack = weapon.copy();
 			thrownStack.setCount(1);
+			removeLoyalty(thrownStack);
 			ThrownTrident trident = new ThrownTrident(level, this.einherjar, thrownStack);
 			((ThrownTridentAccessor) trident).gungnir$setTridentItem(thrownStack);
 			if (thrownStack.is(GungnirMod.GUNGNIR)) {
@@ -542,6 +595,13 @@ public class EinherjarEntity extends PathfinderMob {
 			trident.shoot(x, y + horizontal * 0.2D, z, 2.5F, inaccuracy);
 			serverLevel.addFreshEntity(trident);
 			level.playSound(null, this.einherjar.blockPosition(), SoundEvents.TRIDENT_THROW, SoundSource.HOSTILE, 1.0F, 1.0F);
+		}
+
+		private void removeLoyalty(ItemStack stack) {
+			Map<Enchantment, Integer> enchantments = EnchantmentHelper.getEnchantments(stack);
+			if (enchantments.remove(Enchantments.LOYALTY) != null) {
+				EnchantmentHelper.setEnchantments(enchantments, stack);
+			}
 		}
 	}
 
@@ -634,8 +694,12 @@ public class EinherjarEntity extends PathfinderMob {
 		}
 
 		private static boolean hasGungnirInHand(Player player) {
-			return player.getMainHandItem().is(GungnirMod.GUNGNIR) || player.getOffhandItem().is(GungnirMod.GUNGNIR);
+			return EinherjarEntity.hasGungnirInHand(player);
 		}
+	}
+
+	private static boolean hasGungnirInHand(Player player) {
+		return player.getMainHandItem().is(GungnirMod.GUNGNIR) || player.getOffhandItem().is(GungnirMod.GUNGNIR);
 	}
 
 	private static class EinherjarBowGoal extends Goal {
