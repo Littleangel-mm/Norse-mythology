@@ -3,6 +3,7 @@
 	"package": "com.gungnir.mixin",
 	"compatibilityLevel": "JAVA_17",
 	"mixins": [
+		"HostileTargetEinherjarMixin",
 		"LivingEntityMixin",
 		"ThrownTridentAccessor",
 		"ThrownTridentMixin"

@@ -1,6 +1,8 @@
 package com.gungnir.entity;
 
 import com.gungnir.GungnirMod;
+import com.gungnir.GungnirTridentState;
+import com.gungnir.mixin.ThrownTridentAccessor;
 import java.util.EnumSet;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
@@ -26,7 +28,9 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.Arrow;
+import net.minecraft.world.entity.projectile.ThrownTrident;
 import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.ItemStack;
@@ -64,8 +68,9 @@ public class EinherjarEntity extends PathfinderMob {
 	@Override
 	protected void registerGoals() {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
-		this.goalSelector.addGoal(2, new EinherjarBowGoal(this, 1.0D, 18.0F));
-		this.goalSelector.addGoal(3, new EinherjarMeleeGoal(this, 1.15D, true));
+		this.goalSelector.addGoal(2, new EinherjarThrownWeaponGoal(this, 1.0D, 24.0F));
+		this.goalSelector.addGoal(3, new EinherjarBowGoal(this, 1.0D, 18.0F));
+		this.goalSelector.addGoal(4, new EinherjarMeleeGoal(this, 1.15D, true));
 		this.goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.8D));
 		this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
@@ -170,6 +175,11 @@ public class EinherjarEntity extends PathfinderMob {
 		return this.getMainHandItem().getItem() instanceof BowItem;
 	}
 
+	private boolean isUsingThrownWeapon() {
+		ItemStack stack = this.getMainHandItem();
+		return stack.is(GungnirMod.GUNGNIR) || stack.getItem() instanceof TridentItem;
+	}
+
 	private static int weaponScore(ItemStack stack) {
 		if (stack.isEmpty()) {
 			return 0;
@@ -202,12 +212,88 @@ public class EinherjarEntity extends PathfinderMob {
 
 		@Override
 		public boolean canUse() {
-			return !this.einherjar.isUsingBow() && super.canUse();
+			return !this.einherjar.isUsingBow() && !this.einherjar.isUsingThrownWeapon() && super.canUse();
 		}
 
 		@Override
 		public boolean canContinueToUse() {
-			return !this.einherjar.isUsingBow() && super.canContinueToUse();
+			return !this.einherjar.isUsingBow() && !this.einherjar.isUsingThrownWeapon() && super.canContinueToUse();
+		}
+	}
+
+	private static class EinherjarThrownWeaponGoal extends Goal {
+		private final EinherjarEntity einherjar;
+		private final double speedModifier;
+		private final float attackRadiusSqr;
+		private int attackTime;
+
+		EinherjarThrownWeaponGoal(EinherjarEntity einherjar, double speedModifier, float attackRadius) {
+			this.einherjar = einherjar;
+			this.speedModifier = speedModifier;
+			this.attackRadiusSqr = attackRadius * attackRadius;
+			this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+		}
+
+		@Override
+		public boolean canUse() {
+			return this.einherjar.isUsingThrownWeapon() && this.einherjar.getTarget() != null;
+		}
+
+		@Override
+		public boolean canContinueToUse() {
+			return canUse();
+		}
+
+		@Override
+		public void start() {
+			this.attackTime = 20;
+		}
+
+		@Override
+		public void tick() {
+			LivingEntity target = this.einherjar.getTarget();
+			if (target == null) {
+				return;
+			}
+
+			double distance = this.einherjar.distanceToSqr(target);
+			if (distance > this.attackRadiusSqr * 0.8D) {
+				this.einherjar.getNavigation().moveTo(target, this.speedModifier);
+			} else {
+				this.einherjar.getNavigation().stop();
+			}
+
+			this.einherjar.getLookControl().setLookAt(target, 30.0F, 30.0F);
+			if (distance <= this.attackRadiusSqr && this.einherjar.hasLineOfSight(target) && --this.attackTime <= 0) {
+				this.attackTime = 45;
+				throwWeapon(target);
+			}
+		}
+
+		private void throwWeapon(LivingEntity target) {
+			Level level = this.einherjar.level();
+			if (!(level instanceof ServerLevel serverLevel)) {
+				return;
+			}
+
+			ItemStack weapon = this.einherjar.getMainHandItem();
+			ItemStack thrownStack = weapon.copy();
+			thrownStack.setCount(1);
+			ThrownTrident trident = new ThrownTrident(level, this.einherjar, thrownStack);
+			((ThrownTridentAccessor) trident).gungnir$setTridentItem(thrownStack);
+			if (thrownStack.is(GungnirMod.GUNGNIR)) {
+				((GungnirTridentState) trident).gungnir$setGungnirProjectile(true);
+			}
+			trident.pickup = AbstractArrow.Pickup.DISALLOWED;
+
+			double x = target.getX() - this.einherjar.getX();
+			double y = target.getY(0.3333333333333333D) - trident.getY();
+			double z = target.getZ() - this.einherjar.getZ();
+			double horizontal = Math.sqrt(x * x + z * z);
+			float inaccuracy = thrownStack.is(GungnirMod.GUNGNIR) ? 1.0F : 6.0F;
+			trident.shoot(x, y + horizontal * 0.2D, z, 2.5F, inaccuracy);
+			serverLevel.addFreshEntity(trident);
+			level.playSound(null, this.einherjar.blockPosition(), SoundEvents.TRIDENT_THROW, SoundSource.HOSTILE, 1.0F, 1.0F);
 		}
 	}
 
