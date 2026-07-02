@@ -31,12 +31,15 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.entity.projectile.ThrownTrident;
+import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.AxeItem;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.SwordItem;
+import net.minecraft.world.item.TieredItem;
 import net.minecraft.world.item.TridentItem;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.phys.Vec3;
@@ -110,7 +113,7 @@ public class EinherjarEntity extends PathfinderMob {
 			if (stack.isEmpty()) {
 				continue;
 			}
-			if (tryEquipWeapon(stack) || tryStoreFood(stack)) {
+			if (tryEquipWeapon(stack) || tryEquipArmor(stack) || tryStoreFood(stack)) {
 				this.take(itemEntity, stack.getCount());
 				itemEntity.discard();
 				return;
@@ -130,6 +133,30 @@ public class EinherjarEntity extends PathfinderMob {
 		ItemStack newWeapon = stack.copy();
 		newWeapon.setCount(1);
 		this.setItemSlot(EquipmentSlot.MAINHAND, newWeapon);
+		return true;
+	}
+
+	private boolean tryEquipArmor(ItemStack stack) {
+		if (!(stack.getItem() instanceof ArmorItem armorItem)) {
+			return false;
+		}
+
+		EquipmentSlot slot = armorItem.getEquipmentSlot();
+		if (slot.getType() != EquipmentSlot.Type.ARMOR) {
+			return false;
+		}
+
+		if (armorScore(stack) <= armorScore(this.getItemBySlot(slot))) {
+			return false;
+		}
+
+		ItemStack oldArmor = this.getItemBySlot(slot);
+		if (!oldArmor.isEmpty()) {
+			this.spawnAtLocation(oldArmor.copy());
+		}
+		ItemStack newArmor = stack.copy();
+		newArmor.setCount(1);
+		this.setItemSlot(slot, newArmor);
 		return true;
 	}
 
@@ -185,21 +212,41 @@ public class EinherjarEntity extends PathfinderMob {
 			return 0;
 		}
 		if (stack.is(GungnirMod.GUNGNIR)) {
-			return 100;
+			return 10000;
 		}
 		if (stack.getItem() instanceof TridentItem) {
-			return 80;
+			return 8000 + enchantmentBonus(stack);
 		}
 		if (stack.getItem() instanceof BowItem) {
-			return 60;
+			return 6500 + enchantmentBonus(stack);
 		}
 		if (stack.getItem() instanceof SwordItem) {
-			return 50;
+			return 5000 + tierBonus(stack) + enchantmentBonus(stack);
 		}
 		if (stack.getItem() instanceof AxeItem) {
-			return 45;
+			return 4500 + tierBonus(stack) + enchantmentBonus(stack);
 		}
 		return 0;
+	}
+
+	private static int tierBonus(ItemStack stack) {
+		if (stack.getItem() instanceof TieredItem tieredItem) {
+			return tieredItem.getTier().getLevel() * 120 + (int) (tieredItem.getTier().getAttackDamageBonus() * 20.0F);
+		}
+		return 0;
+	}
+
+	private static int armorScore(ItemStack stack) {
+		if (!(stack.getItem() instanceof ArmorItem armorItem)) {
+			return 0;
+		}
+		return armorItem.getDefense() * 100
+			+ (int) (armorItem.getToughness() * 25.0F)
+			+ enchantmentBonus(stack);
+	}
+
+	private static int enchantmentBonus(ItemStack stack) {
+		return EnchantmentHelper.getEnchantments(stack).values().stream().mapToInt(Integer::intValue).sum() * 10;
 	}
 
 	private static class EinherjarMeleeGoal extends MeleeAttackGoal {
