@@ -1,6 +1,7 @@
 package com.gungnir.entity;
 
 import com.gungnir.GungnirMod;
+import com.gungnir.GungnirLightning;
 import com.gungnir.GungnirTridentState;
 import com.gungnir.mixin.ThrownTridentAccessor;
 import java.util.EnumSet;
@@ -10,6 +11,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.DifficultyInstance;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -47,12 +50,13 @@ import net.minecraft.world.phys.Vec3;
 public class EinherjarEntity extends PathfinderMob {
 	private static final int PICKUP_INTERVAL = 20;
 	private static final int EAT_INTERVAL = 60;
+	private static final int GUNGNIR_BLEEDING_DURATION = Integer.MAX_VALUE;
 	private int pickupCooldown;
 	private int eatCooldown;
 
 	public EinherjarEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
 		super(entityType, level);
-		this.setCanPickUpLoot(true);
+		this.setCanPickUpLoot(false);
 		this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
 		for (EquipmentSlot slot : EquipmentSlot.values()) {
 			this.setDropChance(slot, 1.0F);
@@ -74,6 +78,7 @@ public class EinherjarEntity extends PathfinderMob {
 		this.goalSelector.addGoal(2, new EinherjarThrownWeaponGoal(this, 1.0D, 24.0F));
 		this.goalSelector.addGoal(3, new EinherjarBowGoal(this, 1.0D, 18.0F));
 		this.goalSelector.addGoal(4, new EinherjarMeleeGoal(this, 1.15D, true));
+		this.goalSelector.addGoal(5, new FollowGungnirPlayerGoal(this, 1.0D));
 		this.goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.8D));
 		this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
@@ -180,6 +185,35 @@ public class EinherjarEntity extends PathfinderMob {
 		return true;
 	}
 
+	@Override
+	public boolean wantsToPickUp(ItemStack stack) {
+		return isUsefulPickup(stack);
+	}
+
+	@Override
+	protected boolean canReplaceCurrentItem(ItemStack candidate, ItemStack current) {
+		if (isWeapon(candidate) || isWeapon(current)) {
+			return weaponScore(candidate) > weaponScore(current);
+		}
+		if (candidate.getItem() instanceof ArmorItem || current.getItem() instanceof ArmorItem) {
+			return armorScore(candidate) > armorScore(current);
+		}
+		return super.canReplaceCurrentItem(candidate, current);
+	}
+
+	@Override
+	public boolean doHurtTarget(net.minecraft.world.entity.Entity target) {
+		boolean hurt = super.doHurtTarget(target);
+		if (hurt && target instanceof LivingEntity livingEntity && this.getMainHandItem().is(GungnirMod.GUNGNIR)) {
+			livingEntity.addTag(GungnirMod.BLEEDING_TAG);
+			livingEntity.addEffect(new MobEffectInstance(GungnirMod.BLEEDING, GUNGNIR_BLEEDING_DURATION, 0, false, true, true));
+			if (this.level() instanceof ServerLevel serverLevel) {
+				GungnirLightning.strike(serverLevel, livingEntity);
+			}
+		}
+		return hurt;
+	}
+
 	private void eatIfNeeded() {
 		if (this.getHealth() > this.getMaxHealth() * 0.65F) {
 			return;
@@ -205,6 +239,28 @@ public class EinherjarEntity extends PathfinderMob {
 	private boolean isUsingThrownWeapon() {
 		ItemStack stack = this.getMainHandItem();
 		return stack.is(GungnirMod.GUNGNIR) || stack.getItem() instanceof TridentItem;
+	}
+
+	private boolean isUsefulPickup(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return false;
+		}
+		if (isWeapon(stack)) {
+			return weaponScore(stack) > weaponScore(this.getMainHandItem());
+		}
+		if (stack.getItem() instanceof ArmorItem armorItem) {
+			EquipmentSlot slot = armorItem.getEquipmentSlot();
+			return slot.getType() == EquipmentSlot.Type.ARMOR && armorScore(stack) > armorScore(this.getItemBySlot(slot));
+		}
+		return stack.getItem().isEdible();
+	}
+
+	private static boolean isWeapon(ItemStack stack) {
+		return stack.is(GungnirMod.GUNGNIR)
+			|| stack.getItem() instanceof TridentItem
+			|| stack.getItem() instanceof BowItem
+			|| stack.getItem() instanceof SwordItem
+			|| stack.getItem() instanceof AxeItem;
 	}
 
 	private static int weaponScore(ItemStack stack) {
@@ -269,10 +325,14 @@ public class EinherjarEntity extends PathfinderMob {
 	}
 
 	private static class EinherjarThrownWeaponGoal extends Goal {
+		private static final double MELEE_RANGE_SQR = 9.0D;
+		private static final double RETREAT_RANGE_SQR = 25.0D;
+		private static final int MELEE_COOLDOWN_TICKS = 20;
 		private final EinherjarEntity einherjar;
 		private final double speedModifier;
 		private final float attackRadiusSqr;
 		private int attackTime;
+		private int meleeTime;
 
 		EinherjarThrownWeaponGoal(EinherjarEntity einherjar, double speedModifier, float attackRadius) {
 			this.einherjar = einherjar;
@@ -294,6 +354,7 @@ public class EinherjarEntity extends PathfinderMob {
 		@Override
 		public void start() {
 			this.attackTime = 20;
+			this.meleeTime = 0;
 		}
 
 		@Override
@@ -304,17 +365,42 @@ public class EinherjarEntity extends PathfinderMob {
 			}
 
 			double distance = this.einherjar.distanceToSqr(target);
-			if (distance > this.attackRadiusSqr * 0.8D) {
+			if (distance <= MELEE_RANGE_SQR) {
+				this.einherjar.getNavigation().stop();
+				melee(target);
+				retreatFrom(target);
+			} else if (distance <= RETREAT_RANGE_SQR) {
+				retreatFrom(target);
+			} else if (distance > this.attackRadiusSqr * 0.8D) {
 				this.einherjar.getNavigation().moveTo(target, this.speedModifier);
 			} else {
 				this.einherjar.getNavigation().stop();
 			}
 
 			this.einherjar.getLookControl().setLookAt(target, 30.0F, 30.0F);
-			if (distance <= this.attackRadiusSqr && this.einherjar.hasLineOfSight(target) && --this.attackTime <= 0) {
+			if (distance > MELEE_RANGE_SQR && distance <= this.attackRadiusSqr && this.einherjar.hasLineOfSight(target) && --this.attackTime <= 0) {
 				this.attackTime = 45;
 				throwWeapon(target);
 			}
+		}
+
+		private void melee(LivingEntity target) {
+			if (this.meleeTime > 0) {
+				this.meleeTime--;
+				return;
+			}
+			this.meleeTime = MELEE_COOLDOWN_TICKS;
+			this.einherjar.swing(InteractionHand.MAIN_HAND);
+			this.einherjar.doHurtTarget(target);
+		}
+
+		private void retreatFrom(LivingEntity target) {
+			Vec3 away = this.einherjar.position().subtract(target.position());
+			if (away.horizontalDistanceSqr() <= 0.0001D) {
+				return;
+			}
+			Vec3 retreat = this.einherjar.position().add(away.normalize().scale(6.0D));
+			this.einherjar.getNavigation().moveTo(retreat.x, retreat.y, retreat.z, this.speedModifier * 1.1D);
 		}
 
 		private void throwWeapon(LivingEntity target) {
@@ -341,6 +427,99 @@ public class EinherjarEntity extends PathfinderMob {
 			trident.shoot(x, y + horizontal * 0.2D, z, 2.5F, inaccuracy);
 			serverLevel.addFreshEntity(trident);
 			level.playSound(null, this.einherjar.blockPosition(), SoundEvents.TRIDENT_THROW, SoundSource.HOSTILE, 1.0F, 1.0F);
+		}
+	}
+
+	private static class FollowGungnirPlayerGoal extends Goal {
+		private final EinherjarEntity einherjar;
+		private final double speedModifier;
+		private Player leader;
+
+		FollowGungnirPlayerGoal(EinherjarEntity einherjar, double speedModifier) {
+			this.einherjar = einherjar;
+			this.speedModifier = speedModifier;
+			this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK));
+		}
+
+		@Override
+		public boolean canUse() {
+			this.leader = findLeader();
+			return this.leader != null;
+		}
+
+		@Override
+		public boolean canContinueToUse() {
+			return this.leader != null
+				&& this.leader.isAlive()
+				&& hasGungnirInHand(this.leader)
+				&& this.einherjar.distanceToSqr(this.leader) <= 42.0D * 42.0D;
+		}
+
+		@Override
+		public void stop() {
+			this.leader = null;
+			this.einherjar.getNavigation().stop();
+		}
+
+		@Override
+		public void tick() {
+			if (this.leader == null) {
+				return;
+			}
+
+			this.einherjar.getLookControl().setLookAt(this.leader, 20.0F, 20.0F);
+			LivingEntity sharedTarget = findSharedTarget(this.leader);
+			if (sharedTarget != null) {
+				this.einherjar.setTarget(sharedTarget);
+			}
+
+			double distance = this.einherjar.distanceToSqr(this.leader);
+			if (distance > 7.0D * 7.0D) {
+				this.einherjar.getNavigation().moveTo(this.leader, this.speedModifier);
+			} else if (distance < 2.5D * 2.5D) {
+				Vec3 away = this.einherjar.position().subtract(this.leader.position());
+				if (away.horizontalDistanceSqr() > 0.0001D) {
+					Vec3 step = this.einherjar.position().add(away.normalize().scale(3.0D));
+					this.einherjar.getNavigation().moveTo(step.x, step.y, step.z, this.speedModifier);
+				}
+			} else if (this.einherjar.getTarget() == null) {
+				this.einherjar.getNavigation().stop();
+			}
+		}
+
+		private Player findLeader() {
+			return this.einherjar.level().getEntitiesOfClass(
+				Player.class,
+				this.einherjar.getBoundingBox().inflate(24.0D),
+				player -> player.isAlive() && hasGungnirInHand(player)
+			).stream().min((left, right) -> Double.compare(
+				left.distanceToSqr(this.einherjar),
+				right.distanceToSqr(this.einherjar)
+			)).orElse(null);
+		}
+
+		private LivingEntity findSharedTarget(Player player) {
+			LivingEntity attackedByPlayer = player.getLastHurtMob();
+			if (isValidSharedTarget(attackedByPlayer)) {
+				return attackedByPlayer;
+			}
+			LivingEntity attackingPlayer = player.getLastHurtByMob();
+			if (isValidSharedTarget(attackingPlayer)) {
+				return attackingPlayer;
+			}
+			return null;
+		}
+
+		private boolean isValidSharedTarget(LivingEntity target) {
+			return target != null
+				&& target.isAlive()
+				&& target instanceof Enemy
+				&& target != this.einherjar
+				&& this.einherjar.distanceToSqr(target) <= 48.0D * 48.0D;
+		}
+
+		private static boolean hasGungnirInHand(Player player) {
+			return player.getMainHandItem().is(GungnirMod.GUNGNIR) || player.getOffhandItem().is(GungnirMod.GUNGNIR);
 		}
 	}
 

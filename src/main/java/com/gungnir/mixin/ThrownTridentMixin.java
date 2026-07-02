@@ -3,6 +3,7 @@ package com.gungnir.mixin;
 import com.gungnir.GungnirMod;
 import com.gungnir.GungnirLightning;
 import com.gungnir.GungnirTridentState;
+import com.gungnir.entity.EinherjarEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -53,6 +54,11 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 
 	@Inject(method = "tick", at = @At("TAIL"))
 	private void gungnir$homeTowardHostileTarget(CallbackInfo info) {
+		if (gungnir$isEinherjarProjectile() && !this.level().isClientSide && (this.inGround || this.dealtDamage || this.tickCount > 100)) {
+			this.discard();
+			return;
+		}
+
 		if (!gungnir$isGungnir() || this.level().isClientSide || this.inGround) {
 			return;
 		}
@@ -94,7 +100,18 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 			if (this.level() instanceof ServerLevel serverLevel) {
 				GungnirLightning.strike(serverLevel, livingEntity);
 			}
-			gungnir$returnToOwnerNow();
+			if (gungnir$isEinherjarProjectile()) {
+				this.discard();
+			} else {
+				gungnir$returnToOwnerNow();
+			}
+		}
+	}
+
+	@Inject(method = "onHitEntity", at = @At("TAIL"))
+	private void gungnir$discardEinherjarProjectileOnHit(EntityHitResult hitResult, CallbackInfo info) {
+		if (gungnir$isEinherjarProjectile() && !this.level().isClientSide) {
+			this.discard();
 		}
 	}
 
@@ -144,6 +161,10 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 	private boolean gungnir$isGungnir() {
 		ItemStack stack = ((ThrownTridentAccessor) this).gungnir$getTridentItem();
 		return stack.is(GungnirMod.GUNGNIR) || gungnir$isGungnirProjectile();
+	}
+
+	private boolean gungnir$isEinherjarProjectile() {
+		return this.getOwner() instanceof EinherjarEntity;
 	}
 
 	@Inject(method = "addAdditionalSaveData", at = @At("TAIL"))
