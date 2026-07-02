@@ -4,9 +4,13 @@ import com.gungnir.GungnirMod;
 import com.gungnir.GungnirLightning;
 import com.gungnir.GungnirTridentState;
 import com.gungnir.mixin.ThrownTridentAccessor;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.Iterator;
 import java.util.List;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -51,6 +55,8 @@ public class EinherjarEntity extends PathfinderMob {
 	private static final int PICKUP_INTERVAL = 20;
 	private static final int EAT_INTERVAL = 60;
 	private static final int GUNGNIR_BLEEDING_DURATION = Integer.MAX_VALUE;
+	private static final String WEAPON_INVENTORY_TAG = "GungnirWeaponInventory";
+	private final List<ItemStack> weaponInventory = new ArrayList<>();
 	private int pickupCooldown;
 	private int eatCooldown;
 
@@ -101,6 +107,7 @@ public class EinherjarEntity extends PathfinderMob {
 			return;
 		}
 
+		selectBestWeapon();
 		if (--this.pickupCooldown <= 0) {
 			this.pickupCooldown = PICKUP_INTERVAL;
 			pickUpUsefulItems();
@@ -118,9 +125,17 @@ public class EinherjarEntity extends PathfinderMob {
 			if (stack.isEmpty()) {
 				continue;
 			}
-			if (tryEquipWeapon(stack) || tryEquipArmor(stack) || tryStoreFood(stack)) {
-				this.take(itemEntity, stack.getCount());
-				itemEntity.discard();
+			if (tryEquipWeapon(stack)) {
+				consumeItem(itemEntity, 1);
+				return;
+			}
+			if (tryEquipArmor(stack)) {
+				consumeItem(itemEntity, 1);
+				return;
+			}
+			int storedFood = tryStoreFood(stack);
+			if (storedFood > 0) {
+				consumeItem(itemEntity, storedFood);
 				return;
 			}
 		}
@@ -131,13 +146,11 @@ public class EinherjarEntity extends PathfinderMob {
 			return false;
 		}
 
-		ItemStack oldWeapon = this.getMainHandItem();
-		if (!oldWeapon.isEmpty()) {
-			this.spawnAtLocation(oldWeapon.copy());
-		}
+		stashCurrentWeapon();
 		ItemStack newWeapon = stack.copy();
 		newWeapon.setCount(1);
 		this.setItemSlot(EquipmentSlot.MAINHAND, newWeapon);
+		selectBestWeapon();
 		return true;
 	}
 
@@ -165,29 +178,70 @@ public class EinherjarEntity extends PathfinderMob {
 		return true;
 	}
 
-	private boolean tryStoreFood(ItemStack stack) {
+	private int tryStoreFood(ItemStack stack) {
 		if (!stack.getItem().isEdible()) {
-			return false;
+			return 0;
 		}
 
 		ItemStack offhand = this.getOffhandItem();
 		if (!offhand.isEmpty() && !ItemStack.isSameItemSameTags(offhand, stack)) {
-			return false;
+			return 0;
 		}
 
+		int room = offhand.isEmpty() ? 16 : 16 - offhand.getCount();
+		if (room <= 0) {
+			return 0;
+		}
+
+		int storedCount = Math.min(stack.getCount(), room);
 		ItemStack stored = stack.copy();
-		stored.setCount(Math.min(stack.getCount(), 16));
+		stored.setCount(storedCount);
 		if (!offhand.isEmpty()) {
 			stored.grow(offhand.getCount());
-			stored.setCount(Math.min(stored.getCount(), 16));
 		}
 		this.setItemSlot(EquipmentSlot.OFFHAND, stored);
-		return true;
+		return storedCount;
+	}
+
+	private void consumeItem(ItemEntity itemEntity, int count) {
+		ItemStack stack = itemEntity.getItem();
+		this.take(itemEntity, count);
+		stack.shrink(count);
+		if (stack.isEmpty()) {
+			itemEntity.discard();
+		}
 	}
 
 	@Override
 	public boolean wantsToPickUp(ItemStack stack) {
 		return isUsefulPickup(stack);
+	}
+
+	@Override
+	public void addAdditionalSaveData(CompoundTag tag) {
+		super.addAdditionalSaveData(tag);
+		ListTag weapons = new ListTag();
+		for (ItemStack stack : this.weaponInventory) {
+			if (!stack.isEmpty() && isWeapon(stack)) {
+				weapons.add(stack.save(new CompoundTag()));
+			}
+		}
+		tag.put(WEAPON_INVENTORY_TAG, weapons);
+	}
+
+	@Override
+	public void readAdditionalSaveData(CompoundTag tag) {
+		super.readAdditionalSaveData(tag);
+		this.weaponInventory.clear();
+		ListTag weapons = tag.getList(WEAPON_INVENTORY_TAG, Tag.TAG_COMPOUND);
+		for (int i = 0; i < weapons.size(); i++) {
+			ItemStack stack = ItemStack.of(weapons.getCompound(i));
+			if (!stack.isEmpty() && isWeapon(stack)) {
+				stack.setCount(1);
+				this.weaponInventory.add(stack);
+			}
+		}
+		selectBestWeapon();
 	}
 
 	@Override
@@ -212,6 +266,17 @@ public class EinherjarEntity extends PathfinderMob {
 			}
 		}
 		return hurt;
+	}
+
+	@Override
+	protected void dropEquipment() {
+		super.dropEquipment();
+		for (ItemStack stack : this.weaponInventory) {
+			if (!stack.isEmpty()) {
+				this.spawnAtLocation(stack.copy());
+			}
+		}
+		this.weaponInventory.clear();
 	}
 
 	private void eatIfNeeded() {
@@ -253,6 +318,56 @@ public class EinherjarEntity extends PathfinderMob {
 			return slot.getType() == EquipmentSlot.Type.ARMOR && armorScore(stack) > armorScore(this.getItemBySlot(slot));
 		}
 		return stack.getItem().isEdible();
+	}
+
+	private void stashCurrentWeapon() {
+		ItemStack current = this.getMainHandItem();
+		if (!current.isEmpty() && isWeapon(current)) {
+			ItemStack stored = current.copy();
+			stored.setCount(1);
+			this.weaponInventory.add(stored);
+		}
+	}
+
+	private void selectBestWeapon() {
+		removeInvalidStoredWeapons();
+
+		ItemStack current = this.getMainHandItem();
+		int bestScore = weaponScore(current);
+		int bestIndex = -1;
+		for (int i = 0; i < this.weaponInventory.size(); i++) {
+			ItemStack stored = this.weaponInventory.get(i);
+			int score = weaponScore(stored);
+			if (score > bestScore) {
+				bestScore = score;
+				bestIndex = i;
+			}
+		}
+
+		if (bestIndex < 0) {
+			return;
+		}
+
+		ItemStack bestWeapon = this.weaponInventory.remove(bestIndex);
+		if (!current.isEmpty() && isWeapon(current)) {
+			ItemStack storedCurrent = current.copy();
+			storedCurrent.setCount(1);
+			this.weaponInventory.add(storedCurrent);
+		}
+		this.setItemSlot(EquipmentSlot.MAINHAND, bestWeapon.copy());
+		removeInvalidStoredWeapons();
+	}
+
+	private void removeInvalidStoredWeapons() {
+		Iterator<ItemStack> iterator = this.weaponInventory.iterator();
+		while (iterator.hasNext()) {
+			ItemStack stack = iterator.next();
+			if (stack.isEmpty() || !isWeapon(stack)) {
+				iterator.remove();
+			} else {
+				stack.setCount(1);
+			}
+		}
 	}
 
 	private static boolean isWeapon(ItemStack stack) {
