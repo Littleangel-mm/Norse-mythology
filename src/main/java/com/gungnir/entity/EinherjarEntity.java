@@ -61,6 +61,8 @@ public class EinherjarEntity extends PathfinderMob {
 	private static final int MAX_FOOD_STACK = 32;
 	private static final int STARTING_FOOD_COUNT = 32;
 	private static final int GUNGNIR_BLEEDING_DURATION = Integer.MAX_VALUE;
+	private static final int PLAYER_COMMAND_TICKS = 200;
+	private static final double PLAYER_COMMAND_RANGE = 48.0D;
 	private static final String WEAPON_INVENTORY_TAG = "GungnirWeaponInventory";
 	private final List<ItemStack> weaponInventory = new ArrayList<>();
 	private int pickupCooldown;
@@ -126,7 +128,7 @@ public class EinherjarEntity extends PathfinderMob {
 			this.eatCooldown = EAT_INTERVAL;
 			eatIfNeeded();
 		}
-		supportNearbyGungnirPlayer();
+		supportNearbyCommander();
 	}
 
 	private void pickUpUsefulItems() {
@@ -363,8 +365,8 @@ public class EinherjarEntity extends PathfinderMob {
 		return stack.getItem().isEdible();
 	}
 
-	private void supportNearbyGungnirPlayer() {
-		Player leader = findNearbyGungnirPlayer(32.0D);
+	private void supportNearbyCommander() {
+		Player leader = findNearbyCommander(PLAYER_COMMAND_RANGE);
 		if (leader == null) {
 			return;
 		}
@@ -381,11 +383,11 @@ public class EinherjarEntity extends PathfinderMob {
 		}
 	}
 
-	private Player findNearbyGungnirPlayer(double range) {
+	private Player findNearbyCommander(double range) {
 		return this.level().getEntitiesOfClass(
 			Player.class,
 			this.getBoundingBox().inflate(range),
-			player -> player.isAlive() && hasGungnirInHand(player)
+			player -> player.isAlive() && (hasGungnirInHand(player) || hasRecentSharedTarget(player))
 		).stream().min((left, right) -> Double.compare(
 			left.distanceToSqr(this),
 			right.distanceToSqr(this)
@@ -394,11 +396,11 @@ public class EinherjarEntity extends PathfinderMob {
 
 	private LivingEntity findSharedTarget(Player player) {
 		LivingEntity attackedByPlayer = player.getLastHurtMob();
-		if (isValidSharedTarget(attackedByPlayer)) {
+		if (isRecentAttackCommand(player) && isValidSharedTarget(attackedByPlayer)) {
 			return attackedByPlayer;
 		}
 		LivingEntity attackingPlayer = player.getLastHurtByMob();
-		if (isValidSharedTarget(attackingPlayer)) {
+		if (isRecentDefenseCommand(player) && isValidSharedTarget(attackingPlayer)) {
 			return attackingPlayer;
 		}
 		return null;
@@ -407,9 +409,23 @@ public class EinherjarEntity extends PathfinderMob {
 	private boolean isValidSharedTarget(LivingEntity target) {
 		return target != null
 			&& target.isAlive()
-			&& target instanceof Enemy
 			&& target != this
+			&& !(target instanceof Player)
+			&& !(target instanceof EinherjarEntity)
 			&& this.distanceToSqr(target) <= 48.0D * 48.0D;
+	}
+
+	private boolean hasRecentSharedTarget(Player player) {
+		return (isRecentAttackCommand(player) && isValidSharedTarget(player.getLastHurtMob()))
+			|| (isRecentDefenseCommand(player) && isValidSharedTarget(player.getLastHurtByMob()));
+	}
+
+	private static boolean isRecentAttackCommand(Player player) {
+		return player.tickCount - player.getLastHurtMobTimestamp() <= PLAYER_COMMAND_TICKS;
+	}
+
+	private static boolean isRecentDefenseCommand(Player player) {
+		return player.tickCount - player.getLastHurtByMobTimestamp() <= PLAYER_COMMAND_TICKS;
 	}
 
 	private void stashCurrentWeapon() {
@@ -715,11 +731,11 @@ public class EinherjarEntity extends PathfinderMob {
 
 		private LivingEntity findSharedTarget(Player player) {
 			LivingEntity attackedByPlayer = player.getLastHurtMob();
-			if (isValidSharedTarget(attackedByPlayer)) {
+			if (isRecentAttackCommand(player) && isValidSharedTarget(attackedByPlayer)) {
 				return attackedByPlayer;
 			}
 			LivingEntity attackingPlayer = player.getLastHurtByMob();
-			if (isValidSharedTarget(attackingPlayer)) {
+			if (isRecentDefenseCommand(player) && isValidSharedTarget(attackingPlayer)) {
 				return attackingPlayer;
 			}
 			return null;
@@ -728,8 +744,9 @@ public class EinherjarEntity extends PathfinderMob {
 		private boolean isValidSharedTarget(LivingEntity target) {
 			return target != null
 				&& target.isAlive()
-				&& target instanceof Enemy
 				&& target != this.einherjar
+				&& !(target instanceof Player)
+				&& !(target instanceof EinherjarEntity)
 				&& this.einherjar.distanceToSqr(target) <= 48.0D * 48.0D;
 		}
 

@@ -7,6 +7,7 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -17,6 +18,7 @@ import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import software.bernie.geckolib.animatable.GeoEntity;
@@ -37,6 +39,7 @@ public class FenrirEntity extends PathfinderMob implements GeoEntity {
 	public FenrirEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
 		super(entityType, level);
 		this.xpReward = 120;
+		this.setPersistenceRequired();
 	}
 
 	public static AttributeSupplier.Builder createFenrirAttributes() {
@@ -56,6 +59,17 @@ public class FenrirEntity extends PathfinderMob implements GeoEntity {
 		this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 16.0F));
 		this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Player.class, 10, true, false, player -> this.isEnraged()));
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Mob.class, 10, true, false, this::shouldHuntAtNight));
+	}
+
+	@Override
+	public boolean removeWhenFarAway(double distanceSquared) {
+		return false;
+	}
+
+	@Override
+	public boolean requiresCustomPersistence() {
+		return true;
 	}
 
 	@Override
@@ -73,6 +87,13 @@ public class FenrirEntity extends PathfinderMob implements GeoEntity {
 			setTarget(player);
 		}
 		return hurt;
+	}
+
+	private boolean shouldHuntAtNight(LivingEntity target) {
+		return !this.level().isDay()
+			&& target instanceof Enemy
+			&& target.isAlive()
+			&& target != this;
 	}
 
 	@Override
