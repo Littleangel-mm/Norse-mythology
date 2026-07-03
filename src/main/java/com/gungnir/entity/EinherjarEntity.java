@@ -17,6 +17,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -57,6 +58,8 @@ import net.minecraft.world.phys.Vec3;
 public class EinherjarEntity extends PathfinderMob {
 	private static final int PICKUP_INTERVAL = 20;
 	private static final int EAT_INTERVAL = 60;
+	private static final int MAX_FOOD_STACK = 32;
+	private static final int STARTING_FOOD_COUNT = 32;
 	private static final int GUNGNIR_BLEEDING_DURATION = Integer.MAX_VALUE;
 	private static final String WEAPON_INVENTORY_TAG = "GungnirWeaponInventory";
 	private final List<ItemStack> weaponInventory = new ArrayList<>();
@@ -67,6 +70,7 @@ public class EinherjarEntity extends PathfinderMob {
 		super(entityType, level);
 		this.setCanPickUpLoot(false);
 		this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+		this.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.COOKED_BEEF, STARTING_FOOD_COUNT));
 		for (EquipmentSlot slot : EquipmentSlot.values()) {
 			this.setDropChance(slot, 1.0F);
 		}
@@ -99,6 +103,9 @@ public class EinherjarEntity extends PathfinderMob {
 		SpawnGroupData data = super.finalizeSpawn(level, difficulty, spawnType, spawnData, tag);
 		if (this.getMainHandItem().isEmpty()) {
 			this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+		}
+		if (this.getOffhandItem().isEmpty()) {
+			this.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.COOKED_BEEF, STARTING_FOOD_COUNT));
 		}
 		return data;
 	}
@@ -191,7 +198,7 @@ public class EinherjarEntity extends PathfinderMob {
 			return 0;
 		}
 
-		int room = offhand.isEmpty() ? 16 : 16 - offhand.getCount();
+		int room = offhand.isEmpty() ? MAX_FOOD_STACK : MAX_FOOD_STACK - offhand.getCount();
 		if (room <= 0) {
 			return 0;
 		}
@@ -273,7 +280,40 @@ public class EinherjarEntity extends PathfinderMob {
 
 	@Override
 	protected void dropEquipment() {
+		preserveMainHandWeaponForDrop();
 		super.dropEquipment();
+		dropStoredWeapons();
+	}
+
+	@Override
+	protected void dropCustomDeathLoot(DamageSource damageSource, int looting, boolean recentlyHit) {
+		preserveMainHandWeaponForDrop();
+		super.dropCustomDeathLoot(damageSource, looting, recentlyHit);
+		dropStoredWeapons();
+	}
+
+	private void preserveMainHandWeaponForDrop() {
+		ItemStack current = this.getMainHandItem();
+		if (!current.isEmpty() && isWeapon(current)) {
+			ItemStack preserved = current.copy();
+			preserved.setCount(1);
+			this.weaponInventory.add(preserved);
+			this.setItemSlot(EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+		}
+		preserveArmorForDrop();
+	}
+
+	private void preserveArmorForDrop() {
+		for (EquipmentSlot slot : new EquipmentSlot[] { EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET }) {
+			ItemStack armor = this.getItemBySlot(slot);
+			if (!armor.isEmpty()) {
+				this.spawnAtLocation(armor.copy());
+				this.setItemSlot(slot, ItemStack.EMPTY);
+			}
+		}
+	}
+
+	private void dropStoredWeapons() {
 		for (ItemStack stack : this.weaponInventory) {
 			if (!stack.isEmpty()) {
 				this.spawnAtLocation(stack.copy());
@@ -292,7 +332,7 @@ public class EinherjarEntity extends PathfinderMob {
 			return;
 		}
 
-		this.heal(4.0F);
+		this.heal(6.0F);
 		food.shrink(1);
 		this.level().playSound(null, this.blockPosition(), SoundEvents.GENERIC_EAT, SoundSource.NEUTRAL, 0.8F, 1.0F);
 		if (food.isEmpty()) {

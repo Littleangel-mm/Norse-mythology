@@ -108,6 +108,14 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 		}
 	}
 
+	@Inject(method = "onHitEntity", at = @At("HEAD"), cancellable = true)
+	private void gungnir$preventEinherjarTridentFriendlyFire(EntityHitResult hitResult, CallbackInfo info) {
+		if (this.getOwner() instanceof EinherjarEntity && hitResult.getEntity() instanceof EinherjarEntity && !this.level().isClientSide) {
+			this.discard();
+			info.cancel();
+		}
+	}
+
 	@Inject(method = "onHitEntity", at = @At("TAIL"))
 	private void gungnir$discardEinherjarProjectileOnHit(EntityHitResult hitResult, CallbackInfo info) {
 		if (gungnir$isEinherjarProjectile() && !this.level().isClientSide) {
