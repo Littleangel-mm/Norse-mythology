@@ -10,11 +10,16 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.boss.EnderDragonPart;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.ThrownTrident;
 import net.minecraft.world.item.ItemStack;
@@ -95,11 +100,29 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 
 		Entity hitEntity = hitResult.getEntity();
 		if (hitEntity instanceof LivingEntity livingEntity && hitEntity != this.getOwner()) {
-			livingEntity.addTag(GungnirMod.BLEEDING_TAG);
-			livingEntity.addEffect(new MobEffectInstance(GungnirMod.BLEEDING, BLEEDING_DURATION, 0, false, true, true));
-			if (this.level() instanceof ServerLevel serverLevel) {
-				GungnirLightning.strike(serverLevel, livingEntity);
+			gungnir$markOwnerAttackTarget(livingEntity);
+			gungnir$applyGungnirEffects(livingEntity);
+			if (gungnir$isEinherjarProjectile()) {
+				this.discard();
+			} else {
+				gungnir$returnToOwnerNow();
 			}
+		}
+	}
+
+	@Inject(method = "onHitEntity", at = @At("HEAD"), cancellable = true)
+	private void gungnir$hitEnderImmuneTargets(EntityHitResult hitResult, CallbackInfo info) {
+		if (!gungnir$isGungnir() || this.level().isClientSide) {
+			return;
+		}
+
+		Entity hitEntity = hitResult.getEntity();
+		if (hitEntity == this.getOwner()) {
+			return;
+		}
+
+		if (gungnir$hurtEnderTarget(hitEntity)) {
+			info.cancel();
 			if (gungnir$isEinherjarProjectile()) {
 				this.discard();
 			} else {
@@ -169,6 +192,67 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 	private boolean gungnir$isGungnir() {
 		ItemStack stack = ((ThrownTridentAccessor) this).gungnir$getTridentItem();
 		return stack.is(GungnirMod.GUNGNIR) || gungnir$isGungnirProjectile();
+	}
+
+	private boolean gungnir$hurtEnderTarget(Entity hitEntity) {
+		if (hitEntity instanceof EnderDragonPart dragonPart) {
+			EnderDragon dragon = dragonPart.parentMob;
+			boolean hurt = dragon.hurt(dragonPart, gungnir$divineDamageSource(), 12.0F);
+			if (hurt) {
+				gungnir$markOwnerAttackTarget(dragon);
+				gungnir$applyGungnirEffects(dragon);
+			}
+			return hurt;
+		}
+
+		if (hitEntity instanceof EnderDragon dragon) {
+			boolean hurt = dragon.hurt(gungnir$divineDamageSource(), 12.0F);
+			if (hurt) {
+				gungnir$markOwnerAttackTarget(dragon);
+				gungnir$applyGungnirEffects(dragon);
+			}
+			return hurt;
+		}
+
+		if (hitEntity instanceof EnderMan enderMan) {
+			boolean hurt = enderMan.hurt(gungnir$divineDamageSource(), 12.0F);
+			if (hurt) {
+				gungnir$markOwnerAttackTarget(enderMan);
+				gungnir$applyGungnirEffects(enderMan);
+			}
+			return hurt;
+		}
+
+		return false;
+	}
+
+	private DamageSource gungnir$divineDamageSource() {
+		Entity owner = this.getOwner();
+		if (owner instanceof Player player) {
+			return this.damageSources().playerAttack(player);
+		}
+		if (owner instanceof LivingEntity livingOwner) {
+			return this.damageSources().mobAttack(livingOwner);
+		}
+		return this.damageSources().magic();
+	}
+
+	private void gungnir$applyGungnirEffects(LivingEntity target) {
+		target.addTag(GungnirMod.BLEEDING_TAG);
+		target.addEffect(new MobEffectInstance(GungnirMod.BLEEDING, BLEEDING_DURATION, 0, false, true, true));
+		if (this.level() instanceof ServerLevel serverLevel) {
+			GungnirLightning.strike(serverLevel, target);
+		}
+	}
+
+	private void gungnir$markOwnerAttackTarget(LivingEntity target) {
+		Entity owner = this.getOwner();
+		if (owner instanceof LivingEntity livingOwner) {
+			livingOwner.setLastHurtMob(target);
+		}
+		if (owner instanceof Player player) {
+			player.setLastHurtMob(target);
+		}
 	}
 
 	private boolean gungnir$isEinherjarProjectile() {

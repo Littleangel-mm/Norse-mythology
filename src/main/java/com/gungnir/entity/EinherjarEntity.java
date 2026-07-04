@@ -70,6 +70,7 @@ public class EinherjarEntity extends PathfinderMob {
 
 	public EinherjarEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
 		super(entityType, level);
+		this.setPersistenceRequired();
 		this.setCanPickUpLoot(false);
 		this.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
 		this.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.COOKED_BEEF, STARTING_FOOD_COUNT));
@@ -98,6 +99,16 @@ public class EinherjarEntity extends PathfinderMob {
 		this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Mob.class, 10, true, false, entity -> entity instanceof Enemy));
+	}
+
+	@Override
+	public boolean removeWhenFarAway(double distanceSquared) {
+		return false;
+	}
+
+	@Override
+	public boolean requiresCustomPersistence() {
+		return true;
 	}
 
 	@Override
