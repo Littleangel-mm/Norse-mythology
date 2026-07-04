@@ -4,12 +4,15 @@ These images are concept references for mod art direction.
 
 - `fenrir/`: Fenrir boss and spawn egg concept references.
 - `gungnir/`: Gungnir weapon concept references.
+- `valkyrie/`: Valkyrie winged humanoid texture and spawn egg references.
 
 Runtime Minecraft textures are stored under:
 
 - `src/main/resources/assets/gungnir/textures/entity/fenrir.png`
 - `src/main/resources/assets/gungnir/textures/entity/fenrir_enraged.png`
 - `src/main/resources/assets/gungnir/textures/item/fenrir_spawn_egg.png`
+- `src/main/resources/assets/gungnir/textures/entity/valkyrie.png`
+- `src/main/resources/assets/gungnir/textures/item/valkyrie_spawn_egg.png`
 - `src/main/resources/assets/gungnir/textures/entity/gungnir.png`
 - `src/main/resources/assets/gungnir/textures/item/gungnir.png`
 

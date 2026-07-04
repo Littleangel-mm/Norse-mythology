@@ -4,6 +4,7 @@ import com.gungnir.GungnirMod;
 import com.gungnir.GungnirLightning;
 import com.gungnir.GungnirTridentState;
 import com.gungnir.entity.EinherjarEntity;
+import com.gungnir.entity.ValkyrieEntity;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -133,7 +134,7 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 
 	@Inject(method = "onHitEntity", at = @At("HEAD"), cancellable = true)
 	private void gungnir$preventEinherjarTridentFriendlyFire(EntityHitResult hitResult, CallbackInfo info) {
-		if (this.getOwner() instanceof EinherjarEntity && hitResult.getEntity() instanceof EinherjarEntity && !this.level().isClientSide) {
+		if (gungnir$isFriendlyFire(this.getOwner(), hitResult.getEntity()) && !this.level().isClientSide) {
 			this.discard();
 			info.cancel();
 		}
@@ -257,6 +258,12 @@ public abstract class ThrownTridentMixin extends AbstractArrow implements Gungni
 
 	private boolean gungnir$isEinherjarProjectile() {
 		return this.getOwner() instanceof EinherjarEntity;
+	}
+
+	@Unique
+	private boolean gungnir$isFriendlyFire(Entity owner, Entity hitEntity) {
+		return (owner instanceof EinherjarEntity || owner instanceof ValkyrieEntity)
+			&& (hitEntity instanceof EinherjarEntity || hitEntity instanceof ValkyrieEntity);
 	}
 
 	@Inject(method = "addAdditionalSaveData", at = @At("TAIL"))

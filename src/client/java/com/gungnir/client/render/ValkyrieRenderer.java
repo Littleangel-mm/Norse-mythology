@@ -1,0 +1,24 @@
+package com.gungnir.client.render;
+
+import com.gungnir.GungnirMod;
+import com.gungnir.entity.ValkyrieEntity;
+import net.minecraft.client.model.geom.ModelLayerLocation;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
+import net.minecraft.client.renderer.entity.layers.ItemInHandLayer;
+import net.minecraft.resources.ResourceLocation;
+
+public class ValkyrieRenderer extends HumanoidMobRenderer<ValkyrieEntity, ValkyrieModel<ValkyrieEntity>> {
+	public static final ModelLayerLocation LAYER_LOCATION = new ModelLayerLocation(GungnirMod.id("valkyrie"), "main");
+	private static final ResourceLocation TEXTURE = GungnirMod.id("textures/entity/valkyrie.png");
+
+	public ValkyrieRenderer(EntityRendererProvider.Context context) {
+		super(context, new ValkyrieModel<>(context.bakeLayer(LAYER_LOCATION)), 0.45F);
+		addLayer(new ItemInHandLayer<>(this, context.getItemInHandRenderer()));
+	}
+
+	@Override
+	public ResourceLocation getTextureLocation(ValkyrieEntity entity) {
+		return TEXTURE;
+	}
+}

@@ -6,7 +6,9 @@
 	"item.gungnir.gungnir.tooltip.4": "Inflicts a permanent bleeding effect.",
 	"item.gungnir.fenrir_spawn_egg": "Fenrir Spawn Egg",
 	"item.gungnir.einherjar_spawn_egg": "Einherjar Spawn Egg",
+	"item.gungnir.valkyrie_spawn_egg": "Valkyrie Spawn Egg",
 	"entity.gungnir.fenrir": "Fenrir",
 	"entity.gungnir.einherjar": "Einherjar",
+	"entity.gungnir.valkyrie": "Valkyrie",
 	"effect.gungnir.bleeding": "Bleeding"
 }

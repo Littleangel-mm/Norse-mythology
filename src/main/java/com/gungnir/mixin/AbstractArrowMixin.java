@@ -1,6 +1,7 @@
 package com.gungnir.mixin;
 
 import com.gungnir.entity.EinherjarEntity;
+import com.gungnir.entity.ValkyrieEntity;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.entity.projectile.ThrownTrident;
@@ -17,7 +18,7 @@ public abstract class AbstractArrowMixin {
 	private void gungnir$preventEinherjarArrowFriendlyFire(EntityHitResult hitResult, CallbackInfo info) {
 		AbstractArrow arrow = (AbstractArrow) (Object) this;
 		Entity hitEntity = hitResult.getEntity();
-		if (arrow.getOwner() instanceof EinherjarEntity && hitEntity instanceof EinherjarEntity && !arrow.level().isClientSide) {
+		if (gungnir$isFriendlyFire(arrow.getOwner(), hitEntity) && !arrow.level().isClientSide) {
 			arrow.discard();
 			info.cancel();
 		}
@@ -29,5 +30,10 @@ public abstract class AbstractArrowMixin {
 		if (arrow instanceof ThrownTrident && arrow.getOwner() instanceof EinherjarEntity && !arrow.level().isClientSide) {
 			arrow.discard();
 		}
+	}
+
+	private boolean gungnir$isFriendlyFire(Entity owner, Entity hitEntity) {
+		return (owner instanceof EinherjarEntity || owner instanceof ValkyrieEntity)
+			&& (hitEntity instanceof EinherjarEntity || hitEntity instanceof ValkyrieEntity);
 	}
 }

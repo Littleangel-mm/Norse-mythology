@@ -6,7 +6,9 @@
 	"item.gungnir.gungnir.tooltip.4": "\u9020\u6210\u6c38\u4e45\u6027\u7684\u6d41\u8840\u6548\u679c\u3002",
 	"item.gungnir.fenrir_spawn_egg": "\u82ac\u91cc\u5c14\u602a\u7269\u86cb",
 	"item.gungnir.einherjar_spawn_egg": "\u82f1\u9b42\u602a\u7269\u86cb",
+	"item.gungnir.valkyrie_spawn_egg": "\u5973\u6b66\u795e\u602a\u7269\u86cb",
 	"entity.gungnir.fenrir": "\u82ac\u91cc\u5c14",
 	"entity.gungnir.einherjar": "\u82f1\u9b42",
+	"entity.gungnir.valkyrie": "\u5973\u6b66\u795e",
 	"effect.gungnir.bleeding": "\u6d41\u8840"
 }
