@@ -139,6 +139,7 @@ public class ValkyrieEntity extends PathfinderMob {
 			return;
 		}
 
+		clearInvalidTarget();
 		if (this.getMainHandItem().isEmpty()) {
 			equipInfiniteBow();
 		}
@@ -495,9 +496,21 @@ public class ValkyrieEntity extends PathfinderMob {
 		return this.getLastHurtByMob() != null && this.tickCount - this.getLastHurtByMobTimestamp() <= 200;
 	}
 
+	private void clearInvalidTarget() {
+		LivingEntity target = this.getTarget();
+		if (target != null && !isValidCombatTarget(target)) {
+			this.setTarget(null);
+			this.getNavigation().stop();
+			if (this.isFlying()) {
+				this.setDeltaMovement(this.getDeltaMovement().multiply(0.5D, 0.6D, 0.5D));
+			}
+		}
+	}
+
 	private boolean isValidCombatTarget(LivingEntity target) {
 		return target != null
 			&& target.isAlive()
+			&& !target.isRemoved()
 			&& target != this
 			&& !(target instanceof EinherjarEntity)
 			&& !(target instanceof ValkyrieEntity);
@@ -584,6 +597,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		private static final double HOVER_HEIGHT = 8.0D;
 		private final ValkyrieEntity valkyrie;
 		private int attackTime;
+		private int unseenTicks;
 
 		ValkyrieFlightBowGoal(ValkyrieEntity valkyrie) {
 			this.valkyrie = valkyrie;
@@ -592,17 +606,19 @@ public class ValkyrieEntity extends PathfinderMob {
 
 		@Override
 		public boolean canUse() {
-			return this.valkyrie.getTarget() != null && this.valkyrie.getMainHandItem().getItem() instanceof BowItem;
+			return this.valkyrie.isValidCombatTarget(this.valkyrie.getTarget())
+				&& this.valkyrie.getMainHandItem().getItem() instanceof BowItem;
 		}
 
 		@Override
 		public boolean canContinueToUse() {
-			return canUse();
+			return canUse() && this.valkyrie.distanceToSqr(this.valkyrie.getTarget()) <= ATTACK_RANGE_SQR * 1.4D;
 		}
 
 		@Override
 		public void start() {
 			this.attackTime = 15;
+			this.unseenTicks = 0;
 			this.valkyrie.getNavigation().stop();
 			this.valkyrie.setFlying(true);
 		}
@@ -616,14 +632,23 @@ public class ValkyrieEntity extends PathfinderMob {
 		@Override
 		public void tick() {
 			LivingEntity target = this.valkyrie.getTarget();
-			if (target == null) {
+			if (!this.valkyrie.isValidCombatTarget(target)) {
+				this.valkyrie.setTarget(null);
 				return;
 			}
 
 			this.valkyrie.setFlying(true);
 			this.valkyrie.getLookControl().setLookAt(target, 30.0F, 30.0F);
 			moveToShootingPosition(target);
-			if (--this.attackTime <= 0 && this.valkyrie.distanceToSqr(target) <= ATTACK_RANGE_SQR && this.valkyrie.hasLineOfSight(target)) {
+			boolean canSee = this.valkyrie.hasLineOfSight(target);
+			if (canSee) {
+				this.unseenTicks = 0;
+			} else if (++this.unseenTicks > 60) {
+				this.valkyrie.setTarget(null);
+				return;
+			}
+
+			if (--this.attackTime <= 0 && this.valkyrie.distanceToSqr(target) <= ATTACK_RANGE_SQR && canSee) {
 				this.attackTime = 35;
 				shoot(target);
 			}
