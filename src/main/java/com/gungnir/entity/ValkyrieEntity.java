@@ -1,7 +1,9 @@
 package com.gungnir.entity;
 
 import com.gungnir.GungnirMod;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
@@ -27,9 +29,11 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
@@ -52,11 +56,26 @@ import net.minecraft.world.phys.Vec3;
 public class ValkyrieEntity extends PathfinderMob {
 	private static final EntityDataAccessor<Boolean> FLYING = SynchedEntityData.defineId(ValkyrieEntity.class, EntityDataSerializers.BOOLEAN);
 	private static final String CHOSEN_EINHERJAR_TAG = "ChosenEinherjar";
+	private static final String DEAD_CHOSEN_HANDLED_TAG = "DeadChosenHandled";
+	private static final String BREEDING_COOLDOWN_TAG = "BreedingCooldown";
+	private static final String LAST_CHOSEN_X_TAG = "LastChosenX";
+	private static final String LAST_CHOSEN_Y_TAG = "LastChosenY";
+	private static final String LAST_CHOSEN_Z_TAG = "LastChosenZ";
 	private static final double CHOSEN_SCAN_RANGE = 32.0D;
 	private static final double SUPPORT_RANGE = 48.0D;
 	private static final int CHOSEN_SCAN_INTERVAL = 100;
+	private static final int HEAL_INTERVAL = 100;
+	private static final int BREEDING_COOLDOWN = 20 * 60 * 5;
+	private static final int REVENGE_EQUIPMENT_SCAN_TICKS = 20 * 12;
 	private UUID chosenEinherjarUuid;
 	private int chosenScanCooldown;
+	private int healCooldown;
+	private int breedingCooldown;
+	private int deadChosenEquipmentScanTicks;
+	private boolean deadChosenHandled;
+	private double lastChosenX;
+	private double lastChosenY;
+	private double lastChosenZ;
 
 	public ValkyrieEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
 		super(entityType, level);
@@ -67,7 +86,7 @@ public class ValkyrieEntity extends PathfinderMob {
 
 	public static AttributeSupplier.Builder createValkyrieAttributes() {
 		return Mob.createMobAttributes()
-			.add(Attributes.MAX_HEALTH, 10.0D)
+			.add(Attributes.MAX_HEALTH, 20.0D)
 			.add(Attributes.ATTACK_DAMAGE, 2.0D)
 			.add(Attributes.MOVEMENT_SPEED, 0.1D)
 			.add(Attributes.FLYING_SPEED, 0.1D)
@@ -79,6 +98,7 @@ public class ValkyrieEntity extends PathfinderMob {
 	protected void registerGoals() {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
 		this.goalSelector.addGoal(2, new ValkyrieFlightBowGoal(this));
+		this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.1D, true));
 		this.goalSelector.addGoal(6, new WaterAvoidingRandomStrollGoal(this, 0.8D));
 		this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
@@ -116,14 +136,23 @@ public class ValkyrieEntity extends PathfinderMob {
 			return;
 		}
 
-		if (this.getMainHandItem().isEmpty() || !(this.getMainHandItem().getItem() instanceof BowItem)) {
+		if (this.getMainHandItem().isEmpty()) {
 			equipInfiniteBow();
+		}
+		if (this.breedingCooldown > 0) {
+			this.breedingCooldown--;
+		}
+		if (--this.healCooldown <= 0) {
+			this.healCooldown = HEAL_INTERVAL;
+			healBond();
 		}
 		if (--this.chosenScanCooldown <= 0) {
 			this.chosenScanCooldown = CHOSEN_SCAN_INTERVAL;
 			chooseStrongEinherjar();
 		}
 		supportChosenEinherjar();
+		handleDeadChosenEinherjar();
+		tryBreedWithChosenEinherjar();
 	}
 
 	@Override
@@ -132,6 +161,11 @@ public class ValkyrieEntity extends PathfinderMob {
 		if (this.chosenEinherjarUuid != null) {
 			tag.putUUID(CHOSEN_EINHERJAR_TAG, this.chosenEinherjarUuid);
 		}
+		tag.putBoolean(DEAD_CHOSEN_HANDLED_TAG, this.deadChosenHandled);
+		tag.putInt(BREEDING_COOLDOWN_TAG, this.breedingCooldown);
+		tag.putDouble(LAST_CHOSEN_X_TAG, this.lastChosenX);
+		tag.putDouble(LAST_CHOSEN_Y_TAG, this.lastChosenY);
+		tag.putDouble(LAST_CHOSEN_Z_TAG, this.lastChosenZ);
 	}
 
 	@Override
@@ -140,6 +174,11 @@ public class ValkyrieEntity extends PathfinderMob {
 		if (tag.hasUUID(CHOSEN_EINHERJAR_TAG)) {
 			this.chosenEinherjarUuid = tag.getUUID(CHOSEN_EINHERJAR_TAG);
 		}
+		this.deadChosenHandled = tag.getBoolean(DEAD_CHOSEN_HANDLED_TAG);
+		this.breedingCooldown = tag.getInt(BREEDING_COOLDOWN_TAG);
+		this.lastChosenX = tag.getDouble(LAST_CHOSEN_X_TAG);
+		this.lastChosenY = tag.getDouble(LAST_CHOSEN_Y_TAG);
+		this.lastChosenZ = tag.getDouble(LAST_CHOSEN_Z_TAG);
 	}
 
 	@Override
@@ -168,6 +207,10 @@ public class ValkyrieEntity extends PathfinderMob {
 		}
 	}
 
+	public UUID getChosenEinherjarUuid() {
+		return this.chosenEinherjarUuid;
+	}
+
 	private void equipInfiniteBow() {
 		ItemStack bow = new ItemStack(Items.BOW);
 		EnchantmentHelper.setEnchantments(Map.of(Enchantments.INFINITY_ARROWS, 1), bow);
@@ -186,15 +229,25 @@ public class ValkyrieEntity extends PathfinderMob {
 			return;
 		}
 
-		EinherjarEntity strongest = this.level().getEntitiesOfClass(
+		List<EinherjarEntity> candidates = this.level().getEntitiesOfClass(
 			EinherjarEntity.class,
 			this.getBoundingBox().inflate(CHOSEN_SCAN_RANGE),
-			EinherjarEntity::isAlive
-		).stream().max((left, right) -> Integer.compare(scoreEinherjar(left), scoreEinherjar(right))).orElse(null);
-
-		if (strongest != null) {
-			this.chosenEinherjarUuid = strongest.getUUID();
+			einherjar -> einherjar.isAlive() && einherjar.getBondedValkyrieUuid() == null
+		);
+		if (candidates.isEmpty()) {
+			return;
 		}
+
+		int bestScore = candidates.stream().mapToInt(this::scoreEinherjar).max().orElse(0);
+		List<EinherjarEntity> strongestCandidates = new ArrayList<>();
+		for (EinherjarEntity candidate : candidates) {
+			if (scoreEinherjar(candidate) == bestScore) {
+				strongestCandidates.add(candidate);
+			}
+		}
+
+		EinherjarEntity chosen = strongestCandidates.get(this.getRandom().nextInt(strongestCandidates.size()));
+		bindEinherjar(chosen);
 	}
 
 	private void supportChosenEinherjar() {
@@ -202,6 +255,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		if (chosen == null) {
 			return;
 		}
+		rememberChosenPosition(chosen);
 
 		LivingEntity chosenTarget = chosen.getTarget();
 		if (isValidCombatTarget(chosenTarget)) {
@@ -225,6 +279,129 @@ public class ValkyrieEntity extends PathfinderMob {
 			return einherjar;
 		}
 		return null;
+	}
+
+	private void bindEinherjar(EinherjarEntity einherjar) {
+		this.chosenEinherjarUuid = einherjar.getUUID();
+		this.deadChosenHandled = false;
+		this.deadChosenEquipmentScanTicks = 0;
+		einherjar.setBondedValkyrie(this.getUUID());
+		rememberChosenPosition(einherjar);
+	}
+
+	private void rememberChosenPosition(EinherjarEntity einherjar) {
+		this.lastChosenX = einherjar.getX();
+		this.lastChosenY = einherjar.getY();
+		this.lastChosenZ = einherjar.getZ();
+	}
+
+	private void healBond() {
+		if (this.getHealth() < this.getMaxHealth()) {
+			this.heal(1.0F);
+		}
+
+		EinherjarEntity chosen = getChosenEinherjar();
+		if (chosen != null) {
+			rememberChosenPosition(chosen);
+			if (chosen.getHealth() < chosen.getMaxHealth()) {
+				chosen.heal(1.0F);
+				this.level().playSound(null, chosen.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.NEUTRAL, 0.35F, 1.6F);
+			}
+		}
+	}
+
+	private void handleDeadChosenEinherjar() {
+		if (this.chosenEinherjarUuid == null || getChosenEinherjar() != null) {
+			return;
+		}
+
+		if (!this.deadChosenHandled) {
+			this.deadChosenHandled = true;
+			this.deadChosenEquipmentScanTicks = REVENGE_EQUIPMENT_SCAN_TICKS;
+		}
+
+		if (this.deadChosenEquipmentScanTicks <= 0) {
+			return;
+		}
+		this.deadChosenEquipmentScanTicks--;
+		inheritEquipmentNearLastChosenPosition();
+	}
+
+	private void inheritEquipmentNearLastChosenPosition() {
+		Vec3 deathPosition = new Vec3(this.lastChosenX, this.lastChosenY, this.lastChosenZ);
+		if (this.distanceToSqr(deathPosition) > 3.0D * 3.0D) {
+			this.getNavigation().moveTo(this.lastChosenX, this.lastChosenY, this.lastChosenZ, 1.15D);
+		}
+
+		List<ItemEntity> drops = this.level().getEntitiesOfClass(
+			ItemEntity.class,
+			this.getBoundingBox().inflate(2.5D),
+			item -> item.isAlive() && !item.getItem().isEmpty()
+		);
+		for (ItemEntity drop : drops) {
+			ItemStack stack = drop.getItem();
+			if (equipInheritedStack(stack)) {
+				this.take(drop, 1);
+				stack.shrink(1);
+				if (stack.isEmpty()) {
+					drop.discard();
+				}
+			}
+		}
+	}
+
+	private boolean equipInheritedStack(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return false;
+		}
+		if (isWeapon(stack) && weaponScore(stack) > weaponScore(this.getMainHandItem())) {
+			ItemStack inherited = stack.copy();
+			inherited.setCount(1);
+			this.setItemSlot(EquipmentSlot.MAINHAND, inherited);
+			this.setDropChance(EquipmentSlot.MAINHAND, 1.0F);
+			return true;
+		}
+		if (stack.getItem() instanceof ArmorItem armorItem) {
+			EquipmentSlot slot = armorItem.getEquipmentSlot();
+			if (slot.getType() == EquipmentSlot.Type.ARMOR && armorScore(stack) > armorScore(this.getItemBySlot(slot))) {
+				ItemStack inherited = stack.copy();
+				inherited.setCount(1);
+				this.setItemSlot(slot, inherited);
+				this.setDropChance(slot, 1.0F);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void tryBreedWithChosenEinherjar() {
+		EinherjarEntity chosen = getChosenEinherjar();
+		if (chosen == null || this.breedingCooldown > 0 || this.getTarget() != null || hasRecentCombat()) {
+			return;
+		}
+		if (!chosen.canBreedWithValkyrie(this.getUUID()) || this.distanceToSqr(chosen) > 4.0D * 4.0D) {
+			return;
+		}
+
+		if (!(this.level() instanceof ServerLevel serverLevel)) {
+			return;
+		}
+
+		EinherjarEntity child = GungnirMod.EINHERJAR.create(serverLevel);
+		if (child == null) {
+			return;
+		}
+
+		child.moveTo((this.getX() + chosen.getX()) * 0.5D, this.getY(), (this.getZ() + chosen.getZ()) * 0.5D, this.getYRot(), 0.0F);
+		child.finalizeSpawn(serverLevel, serverLevel.getCurrentDifficultyAt(child.blockPosition()), MobSpawnType.BREEDING, null, null);
+		serverLevel.addFreshEntity(child);
+		this.breedingCooldown = BREEDING_COOLDOWN;
+		chosen.markValkyrieBreedingCooldown(BREEDING_COOLDOWN);
+		serverLevel.playSound(null, child.blockPosition(), SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.NEUTRAL, 0.9F, 1.2F);
+	}
+
+	private boolean hasRecentCombat() {
+		return this.getLastHurtByMob() != null && this.tickCount - this.getLastHurtByMobTimestamp() <= 200;
 	}
 
 	private boolean isValidCombatTarget(LivingEntity target) {
@@ -286,6 +463,14 @@ public class ValkyrieEntity extends PathfinderMob {
 		return EnchantmentHelper.getEnchantments(stack).values().stream().mapToInt(Integer::intValue).sum() * 10;
 	}
 
+	private static boolean isWeapon(ItemStack stack) {
+		return stack.is(GungnirMod.GUNGNIR)
+			|| stack.getItem() instanceof TridentItem
+			|| stack.getItem() instanceof BowItem
+			|| stack.getItem() instanceof SwordItem
+			|| stack.getItem() instanceof AxeItem;
+	}
+
 	private void convertVillagerToEinherjar(ServerLevel level, LivingEntity villager) {
 		EinherjarEntity einherjar = GungnirMod.EINHERJAR.create(level);
 		if (einherjar == null) {
@@ -297,7 +482,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		level.addFreshEntity(einherjar);
 		level.playSound(null, villager.blockPosition(), SoundEvents.TOTEM_USE, SoundSource.NEUTRAL, 0.75F, 1.25F);
 		if (this.chosenEinherjarUuid == null) {
-			this.chosenEinherjarUuid = einherjar.getUUID();
+			bindEinherjar(einherjar);
 		}
 	}
 

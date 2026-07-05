@@ -9,6 +9,7 @@ import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -64,9 +65,13 @@ public class EinherjarEntity extends PathfinderMob {
 	private static final int PLAYER_COMMAND_TICKS = 200;
 	private static final double PLAYER_COMMAND_RANGE = 48.0D;
 	private static final String WEAPON_INVENTORY_TAG = "GungnirWeaponInventory";
+	private static final String BONDED_VALKYRIE_TAG = "BondedValkyrie";
+	private static final String BREEDING_COOLDOWN_TAG = "ValkyrieBreedingCooldown";
 	private final List<ItemStack> weaponInventory = new ArrayList<>();
 	private int pickupCooldown;
 	private int eatCooldown;
+	private UUID bondedValkyrieUuid;
+	private int breedingCooldown;
 
 	public EinherjarEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
 		super(entityType, level);
@@ -139,6 +144,10 @@ public class EinherjarEntity extends PathfinderMob {
 			this.eatCooldown = EAT_INTERVAL;
 			eatIfNeeded();
 		}
+		if (this.breedingCooldown > 0) {
+			this.breedingCooldown--;
+		}
+		supportBondedValkyrie();
 		supportNearbyCommander();
 	}
 
@@ -250,6 +259,10 @@ public class EinherjarEntity extends PathfinderMob {
 			}
 		}
 		tag.put(WEAPON_INVENTORY_TAG, weapons);
+		if (this.bondedValkyrieUuid != null) {
+			tag.putUUID(BONDED_VALKYRIE_TAG, this.bondedValkyrieUuid);
+		}
+		tag.putInt(BREEDING_COOLDOWN_TAG, this.breedingCooldown);
 	}
 
 	@Override
@@ -265,6 +278,10 @@ public class EinherjarEntity extends PathfinderMob {
 			}
 		}
 		selectBestWeapon();
+		if (tag.hasUUID(BONDED_VALKYRIE_TAG)) {
+			this.bondedValkyrieUuid = tag.getUUID(BONDED_VALKYRIE_TAG);
+		}
+		this.breedingCooldown = tag.getInt(BREEDING_COOLDOWN_TAG);
 	}
 
 	@Override
@@ -355,6 +372,68 @@ public class EinherjarEntity extends PathfinderMob {
 
 	private boolean isUsingBow() {
 		return this.getMainHandItem().getItem() instanceof BowItem;
+	}
+
+	public UUID getBondedValkyrieUuid() {
+		return this.bondedValkyrieUuid;
+	}
+
+	public void setBondedValkyrie(UUID valkyrieUuid) {
+		if (this.bondedValkyrieUuid == null) {
+			this.bondedValkyrieUuid = valkyrieUuid;
+		}
+	}
+
+	public boolean canBreedWithValkyrie(UUID valkyrieUuid) {
+		return this.bondedValkyrieUuid != null
+			&& this.bondedValkyrieUuid.equals(valkyrieUuid)
+			&& this.breedingCooldown <= 0
+			&& this.getTarget() == null
+			&& !hasRecentCombat();
+	}
+
+	public void markValkyrieBreedingCooldown(int cooldownTicks) {
+		this.breedingCooldown = cooldownTicks;
+	}
+
+	public void acceptInheritedEquipment(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return;
+		}
+		if (tryEquipWeapon(stack)) {
+			return;
+		}
+		tryEquipArmor(stack);
+	}
+
+	private void supportBondedValkyrie() {
+		ValkyrieEntity valkyrie = getBondedValkyrie();
+		if (valkyrie == null) {
+			return;
+		}
+
+		LivingEntity valkyrieTarget = valkyrie.getTarget();
+		if (isValidSharedTarget(valkyrieTarget)) {
+			this.setTarget(valkyrieTarget);
+		}
+
+		if (this.getTarget() == null && this.distanceToSqr(valkyrie) > 6.0D * 6.0D) {
+			this.getNavigation().moveTo(valkyrie, 1.0D);
+		}
+	}
+
+	private ValkyrieEntity getBondedValkyrie() {
+		if (this.bondedValkyrieUuid == null || !(this.level() instanceof ServerLevel serverLevel)) {
+			return null;
+		}
+		if (serverLevel.getEntity(this.bondedValkyrieUuid) instanceof ValkyrieEntity valkyrie && valkyrie.isAlive()) {
+			return valkyrie;
+		}
+		return null;
+	}
+
+	private boolean hasRecentCombat() {
+		return this.getLastHurtByMob() != null && this.tickCount - this.getLastHurtByMobTimestamp() <= 200;
 	}
 
 	private boolean isUsingThrownWeapon() {
