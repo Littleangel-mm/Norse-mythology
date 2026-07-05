@@ -61,6 +61,7 @@ public class ValkyrieEntity extends PathfinderMob {
 	private static final String LAST_CHOSEN_X_TAG = "LastChosenX";
 	private static final String LAST_CHOSEN_Y_TAG = "LastChosenY";
 	private static final String LAST_CHOSEN_Z_TAG = "LastChosenZ";
+	private static final String CHILD_OF_VALKYRIE_TAG_PREFIX = GungnirMod.MOD_ID + ".valkyrie_child.";
 	private static final double CHOSEN_SCAN_RANGE = 32.0D;
 	private static final double SUPPORT_RANGE = 48.0D;
 	private static final int CHOSEN_SCAN_INTERVAL = 100;
@@ -103,7 +104,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Mob.class, 10, true, false, this::isHostileTarget));
-		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Villager.class, 10, true, false, villager -> villager.isAlive() && !villager.isBaby()));
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Villager.class, 10, true, false, entity -> entity instanceof Villager villager && isOwnChildVillager(villager)));
 	}
 
 	@Override
@@ -184,7 +185,7 @@ public class ValkyrieEntity extends PathfinderMob {
 	@Override
 	public boolean killedEntity(ServerLevel level, LivingEntity killedEntity) {
 		boolean killed = super.killedEntity(level, killedEntity);
-		if (killedEntity instanceof Villager) {
+		if (killedEntity instanceof Villager villager && isOwnChildVillager(villager)) {
 			convertVillagerToEinherjar(level, killedEntity);
 		}
 		return killed;
@@ -222,6 +223,14 @@ public class ValkyrieEntity extends PathfinderMob {
 
 	private boolean isHostileTarget(LivingEntity target) {
 		return target instanceof Enemy && target.isAlive() && target != this;
+	}
+
+	private boolean isOwnChildVillager(Villager villager) {
+		return villager.isAlive() && villager.getTags().contains(childTag());
+	}
+
+	private String childTag() {
+		return CHILD_OF_VALKYRIE_TAG_PREFIX + this.getUUID();
 	}
 
 	private void chooseStrongEinherjar() {
@@ -395,6 +404,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		child.moveTo((this.getX() + chosen.getX()) * 0.5D, this.getY(), (this.getZ() + chosen.getZ()) * 0.5D, this.getYRot(), 0.0F);
 		child.finalizeSpawn(serverLevel, serverLevel.getCurrentDifficultyAt(child.blockPosition()), MobSpawnType.BREEDING, null, null);
 		child.setAge(-24000);
+		child.addTag(childTag());
 		serverLevel.addFreshEntity(child);
 		this.breedingCooldown = BREEDING_COOLDOWN;
 		chosen.markValkyrieBreedingCooldown(BREEDING_COOLDOWN);
