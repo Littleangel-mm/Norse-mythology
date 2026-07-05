@@ -20,6 +20,7 @@ import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -135,6 +136,7 @@ public class EinherjarEntity extends PathfinderMob {
 			return;
 		}
 
+		clearInvalidTarget();
 		selectBestWeapon();
 		if (--this.pickupCooldown <= 0) {
 			this.pickupCooldown = PICKUP_INTERVAL;
@@ -404,6 +406,21 @@ public class EinherjarEntity extends PathfinderMob {
 			return;
 		}
 		tryEquipArmor(stack);
+	}
+
+	public void clearTargetIfTarget(Entity entity) {
+		if (entity != null && this.getTarget() == entity) {
+			this.setTarget(null);
+			this.getNavigation().stop();
+		}
+	}
+
+	private void clearInvalidTarget() {
+		LivingEntity target = this.getTarget();
+		if (target != null && (!target.isAlive() || target.isRemoved())) {
+			this.setTarget(null);
+			this.getNavigation().stop();
+		}
 	}
 
 	private void supportBondedValkyrie() {

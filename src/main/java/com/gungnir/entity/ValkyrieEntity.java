@@ -195,6 +195,12 @@ public class ValkyrieEntity extends PathfinderMob {
 	}
 
 	@Override
+	public void die(DamageSource damageSource) {
+		clearChosenEinherjarTarget();
+		super.die(damageSource);
+	}
+
+	@Override
 	public boolean causeFallDamage(float fallDistance, float multiplier, DamageSource source) {
 		return false;
 	}
@@ -294,6 +300,13 @@ public class ValkyrieEntity extends PathfinderMob {
 			return einherjar;
 		}
 		return null;
+	}
+
+	private void clearChosenEinherjarTarget() {
+		EinherjarEntity chosen = getChosenEinherjar();
+		if (chosen != null) {
+			chosen.clearTargetIfTarget(this);
+		}
 	}
 
 	private void bindEinherjar(EinherjarEntity einherjar) {
