@@ -65,6 +65,7 @@ public class ValkyrieEntity extends PathfinderMob {
 	private static final String CHILD_OF_VALKYRIE_TAG_PREFIX = GungnirMod.MOD_ID + ".valkyrie_child.";
 	private static final double CHOSEN_SCAN_RANGE = 32.0D;
 	private static final double SUPPORT_RANGE = 48.0D;
+	private static final double MAX_COMBAT_RANGE_SQR = 48.0D * 48.0D;
 	private static final int CHOSEN_SCAN_INTERVAL = 100;
 	private static final int HEAL_INTERVAL = 100;
 	private static final int BREEDING_COOLDOWN = 20 * 60 * 5;
@@ -512,6 +513,7 @@ public class ValkyrieEntity extends PathfinderMob {
 			&& target.isAlive()
 			&& !target.isRemoved()
 			&& target != this
+			&& this.distanceToSqr(target) <= MAX_COMBAT_RANGE_SQR
 			&& !(target instanceof EinherjarEntity)
 			&& !(target instanceof ValkyrieEntity);
 	}
@@ -612,7 +614,7 @@ public class ValkyrieEntity extends PathfinderMob {
 
 		@Override
 		public boolean canContinueToUse() {
-			return canUse() && this.valkyrie.distanceToSqr(this.valkyrie.getTarget()) <= ATTACK_RANGE_SQR * 1.4D;
+			return canUse();
 		}
 
 		@Override
@@ -627,6 +629,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		public void stop() {
 			this.valkyrie.setFlying(false);
 			this.valkyrie.getNavigation().stop();
+			this.valkyrie.setDeltaMovement(this.valkyrie.getDeltaMovement().multiply(0.45D, 0.45D, 0.45D));
 		}
 
 		@Override
