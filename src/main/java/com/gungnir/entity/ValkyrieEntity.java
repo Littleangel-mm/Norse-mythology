@@ -103,7 +103,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Mob.class, 10, true, false, this::isHostileTarget));
-		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Villager.class, 10, true, false, villager -> villager.isAlive()));
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Villager.class, 10, true, false, villager -> villager.isAlive() && !villager.isBaby()));
 	}
 
 	@Override
@@ -387,13 +387,14 @@ public class ValkyrieEntity extends PathfinderMob {
 			return;
 		}
 
-		EinherjarEntity child = GungnirMod.EINHERJAR.create(serverLevel);
+		Villager child = EntityType.VILLAGER.create(serverLevel);
 		if (child == null) {
 			return;
 		}
 
 		child.moveTo((this.getX() + chosen.getX()) * 0.5D, this.getY(), (this.getZ() + chosen.getZ()) * 0.5D, this.getYRot(), 0.0F);
 		child.finalizeSpawn(serverLevel, serverLevel.getCurrentDifficultyAt(child.blockPosition()), MobSpawnType.BREEDING, null, null);
+		child.setAge(-24000);
 		serverLevel.addFreshEntity(child);
 		this.breedingCooldown = BREEDING_COOLDOWN;
 		chosen.markValkyrieBreedingCooldown(BREEDING_COOLDOWN);
