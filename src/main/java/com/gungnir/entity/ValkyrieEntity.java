@@ -6,6 +6,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -73,6 +74,7 @@ public class ValkyrieEntity extends PathfinderMob {
 	private int healCooldown;
 	private int breedingCooldown;
 	private int deadChosenEquipmentScanTicks;
+	private int bondParticleTicks;
 	private boolean deadChosenHandled;
 	private double lastChosenX;
 	private double lastChosenY;
@@ -151,6 +153,7 @@ public class ValkyrieEntity extends PathfinderMob {
 			this.chosenScanCooldown = CHOSEN_SCAN_INTERVAL;
 			chooseStrongEinherjar();
 		}
+		spawnBondParticles();
 		supportChosenEinherjar();
 		handleDeadChosenEinherjar();
 		tryBreedWithChosenEinherjar();
@@ -275,7 +278,10 @@ public class ValkyrieEntity extends PathfinderMob {
 		LivingEntity attacker = chosen.getLastHurtByMob();
 		if (isValidCombatTarget(attacker) && this.distanceToSqr(attacker) <= SUPPORT_RANGE * SUPPORT_RANGE) {
 			this.setTarget(attacker);
+			return;
 		}
+
+		followChosenEinherjar(chosen);
 	}
 
 	private EinherjarEntity getChosenEinherjar() {
@@ -284,7 +290,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		}
 
 		Entity entity = serverLevel.getEntity(this.chosenEinherjarUuid);
-		if (entity instanceof EinherjarEntity einherjar && einherjar.isAlive() && this.distanceToSqr(einherjar) <= SUPPORT_RANGE * SUPPORT_RANGE) {
+		if (entity instanceof EinherjarEntity einherjar && einherjar.isAlive()) {
 			return einherjar;
 		}
 		return null;
@@ -294,8 +300,50 @@ public class ValkyrieEntity extends PathfinderMob {
 		this.chosenEinherjarUuid = einherjar.getUUID();
 		this.deadChosenHandled = false;
 		this.deadChosenEquipmentScanTicks = 0;
+		this.bondParticleTicks = 80;
 		einherjar.setBondedValkyrie(this.getUUID());
 		rememberChosenPosition(einherjar);
+	}
+
+	private void spawnBondParticles() {
+		if (this.bondParticleTicks <= 0) {
+			return;
+		}
+		this.bondParticleTicks--;
+		if (this.bondParticleTicks % 8 != 0 || !(this.level() instanceof ServerLevel serverLevel)) {
+			return;
+		}
+
+		serverLevel.sendParticles(ParticleTypes.HEART, this.getX(), this.getY() + 1.5D, this.getZ(), 2, 0.35D, 0.35D, 0.35D, 0.02D);
+		EinherjarEntity chosen = getChosenEinherjar();
+		if (chosen != null) {
+			serverLevel.sendParticles(ParticleTypes.HEART, chosen.getX(), chosen.getY() + 1.6D, chosen.getZ(), 2, 0.35D, 0.35D, 0.35D, 0.02D);
+		}
+	}
+
+	private void followChosenEinherjar(EinherjarEntity chosen) {
+		if (this.getTarget() != null) {
+			return;
+		}
+
+		double distance = this.distanceToSqr(chosen);
+		if (distance <= 4.0D * 4.0D && Math.abs(this.getY() - chosen.getY()) < 1.25D) {
+			this.setFlying(false);
+			this.getNavigation().stop();
+			return;
+		}
+
+		this.setFlying(true);
+		this.getNavigation().stop();
+		Vec3 desired = chosen.position().add(0.0D, 1.7D, 0.0D);
+		Vec3 toDesired = desired.subtract(this.position());
+		Vec3 current = this.getDeltaMovement().scale(0.55D);
+		Vec3 steering = toDesired.scale(0.08D);
+		if (steering.length() > 0.28D) {
+			steering = steering.normalize().scale(0.28D);
+		}
+		this.setDeltaMovement(current.add(steering));
+		this.hasImpulse = true;
 	}
 
 	private void rememberChosenPosition(EinherjarEntity einherjar) {

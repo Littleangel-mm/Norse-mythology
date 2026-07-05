@@ -4,7 +4,6 @@ import com.gungnir.GungnirMod;
 import com.gungnir.entity.ValkyrieEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.minecraft.client.model.ElytraModel;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -17,17 +16,18 @@ import net.minecraft.resources.ResourceLocation;
 
 public class ValkyrieElytraLayer extends RenderLayer<ValkyrieEntity, ValkyrieModel<ValkyrieEntity>> {
 	private static final ResourceLocation TEXTURE = GungnirMod.id("textures/entity/valkyrie_elytra.png");
-	private final ElytraModel<ValkyrieEntity> elytraModel;
+	private final ValkyrieElytraModel elytraModel;
 
 	public ValkyrieElytraLayer(RenderLayerParent<ValkyrieEntity, ValkyrieModel<ValkyrieEntity>> renderer, EntityModelSet modelSet) {
 		super(renderer);
-		this.elytraModel = new ElytraModel<>(modelSet.bakeLayer(ModelLayers.ELYTRA));
+		this.elytraModel = new ValkyrieElytraModel(modelSet.bakeLayer(ModelLayers.ELYTRA));
 	}
 
 	@Override
 	public void render(PoseStack poseStack, MultiBufferSource buffer, int packedLight, ValkyrieEntity valkyrie, float limbSwing, float limbSwingAmount, float partialTick, float ageInTicks, float netHeadYaw, float headPitch) {
 		poseStack.pushPose();
-		poseStack.translate(0.0D, 0.0D, 0.125D);
+		poseStack.translate(0.0D, 0.0D, 0.09D);
+		poseStack.scale(0.94F, 1.0F, 0.5F);
 		this.getParentModel().copyPropertiesTo(this.elytraModel);
 		this.elytraModel.setupAnim(valkyrie, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
 		VertexConsumer vertexConsumer = ItemRenderer.getArmorFoilBuffer(buffer, RenderType.armorCutoutNoCull(TEXTURE), false, false);
