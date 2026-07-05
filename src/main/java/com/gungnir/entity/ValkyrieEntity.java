@@ -196,6 +196,7 @@ public class ValkyrieEntity extends PathfinderMob {
 
 	@Override
 	public void die(DamageSource damageSource) {
+		releaseChosenEinherjar();
 		clearChosenEinherjarTarget();
 		super.die(damageSource);
 	}
@@ -264,8 +265,12 @@ public class ValkyrieEntity extends PathfinderMob {
 			}
 		}
 
-		EinherjarEntity chosen = strongestCandidates.get(this.getRandom().nextInt(strongestCandidates.size()));
-		bindEinherjar(chosen);
+		while (!strongestCandidates.isEmpty()) {
+			EinherjarEntity chosen = strongestCandidates.remove(this.getRandom().nextInt(strongestCandidates.size()));
+			if (bindEinherjar(chosen)) {
+				return;
+			}
+		}
 	}
 
 	private void supportChosenEinherjar() {
@@ -297,6 +302,10 @@ public class ValkyrieEntity extends PathfinderMob {
 
 		Entity entity = serverLevel.getEntity(this.chosenEinherjarUuid);
 		if (entity instanceof EinherjarEntity einherjar && einherjar.isAlive()) {
+			if (!einherjar.isBondedToValkyrie(this.getUUID())) {
+				this.chosenEinherjarUuid = null;
+				return null;
+			}
 			return einherjar;
 		}
 		return null;
@@ -309,13 +318,23 @@ public class ValkyrieEntity extends PathfinderMob {
 		}
 	}
 
-	private void bindEinherjar(EinherjarEntity einherjar) {
+	private boolean bindEinherjar(EinherjarEntity einherjar) {
+		if (!einherjar.tryBindValkyrie(this.getUUID())) {
+			return false;
+		}
 		this.chosenEinherjarUuid = einherjar.getUUID();
 		this.deadChosenHandled = false;
 		this.deadChosenEquipmentScanTicks = 0;
 		this.bondParticleTicks = 80;
-		einherjar.setBondedValkyrie(this.getUUID());
 		rememberChosenPosition(einherjar);
+		return true;
+	}
+
+	private void releaseChosenEinherjar() {
+		EinherjarEntity chosen = getChosenEinherjar();
+		if (chosen != null) {
+			chosen.releaseBondedValkyrie(this.getUUID());
+		}
 	}
 
 	private void spawnBondParticles() {

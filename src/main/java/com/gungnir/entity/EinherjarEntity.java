@@ -380,9 +380,21 @@ public class EinherjarEntity extends PathfinderMob {
 		return this.bondedValkyrieUuid;
 	}
 
-	public void setBondedValkyrie(UUID valkyrieUuid) {
+	public boolean tryBindValkyrie(UUID valkyrieUuid) {
 		if (this.bondedValkyrieUuid == null) {
 			this.bondedValkyrieUuid = valkyrieUuid;
+			return true;
+		}
+		return this.bondedValkyrieUuid.equals(valkyrieUuid);
+	}
+
+	public boolean isBondedToValkyrie(UUID valkyrieUuid) {
+		return this.bondedValkyrieUuid != null && this.bondedValkyrieUuid.equals(valkyrieUuid);
+	}
+
+	public void releaseBondedValkyrie(UUID valkyrieUuid) {
+		if (isBondedToValkyrie(valkyrieUuid)) {
+			this.bondedValkyrieUuid = null;
 		}
 	}
 
