@@ -238,7 +238,7 @@ public class ValkyrieEntity extends PathfinderMob {
 	}
 
 	private boolean isOwnChildVillager(Villager villager) {
-		return villager.isAlive() && villager.getTags().contains(childTag());
+		return villager.isAlive() && !villager.isBaby() && villager.getTags().contains(childTag());
 	}
 
 	private String childTag() {
