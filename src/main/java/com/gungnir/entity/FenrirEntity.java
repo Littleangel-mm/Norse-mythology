@@ -34,6 +34,9 @@ public class FenrirEntity extends PathfinderMob implements GeoEntity {
 	private static final String ENRAGED_TAG = "Enraged";
 	private static final RawAnimation IDLE = RawAnimation.begin().thenLoop("animation.fenrir.idle");
 	private static final RawAnimation WALK = RawAnimation.begin().thenLoop("animation.fenrir.walk");
+	private static final RawAnimation ENRAGED_IDLE = RawAnimation.begin().thenLoop("animation.fenrir.enraged_idle");
+	private static final RawAnimation RUN = RawAnimation.begin().thenLoop("animation.fenrir.run");
+	private static final RawAnimation BITE = RawAnimation.begin().thenPlay("animation.fenrir.bite");
 	private final AnimatableInstanceCache animationCache = GeckoLibUtil.createInstanceCache(this);
 
 	public FenrirEntity(EntityType<? extends PathfinderMob> entityType, Level level) {
@@ -89,6 +92,15 @@ public class FenrirEntity extends PathfinderMob implements GeoEntity {
 		return hurt;
 	}
 
+	@Override
+	public boolean doHurtTarget(Entity target) {
+		boolean hurt = super.doHurtTarget(target);
+		if (hurt) {
+			triggerAnim("attack", "bite");
+		}
+		return hurt;
+	}
+
 	private boolean shouldHuntAtNight(LivingEntity target) {
 		return !this.level().isDay()
 			&& target instanceof Enemy
@@ -119,9 +131,15 @@ public class FenrirEntity extends PathfinderMob implements GeoEntity {
 	@Override
 	public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
 		controllers.add(new AnimationController<>(this, "movement", 5, state -> {
-			state.setAnimation(state.isMoving() ? WALK : IDLE);
+			if (state.isMoving()) {
+				state.setAnimation(isEnraged() ? RUN : WALK);
+			} else {
+				state.setAnimation(isEnraged() ? ENRAGED_IDLE : IDLE);
+			}
 			return PlayState.CONTINUE;
 		}));
+		controllers.add(new AnimationController<>(this, "attack", 0, state -> PlayState.CONTINUE)
+			.triggerableAnim("bite", BITE));
 	}
 
 	@Override
