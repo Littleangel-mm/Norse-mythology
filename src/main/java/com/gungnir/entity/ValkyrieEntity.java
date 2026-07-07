@@ -62,7 +62,6 @@ public class ValkyrieEntity extends PathfinderMob {
 	private static final String LAST_CHOSEN_X_TAG = "LastChosenX";
 	private static final String LAST_CHOSEN_Y_TAG = "LastChosenY";
 	private static final String LAST_CHOSEN_Z_TAG = "LastChosenZ";
-	private static final String CHILD_OF_VALKYRIE_TAG_PREFIX = GungnirMod.MOD_ID + ".valkyrie_child.";
 	private static final double CHOSEN_SCAN_RANGE = 32.0D;
 	private static final double SUPPORT_RANGE = 48.0D;
 	private static final double MAX_COMBAT_RANGE_SQR = 48.0D * 48.0D;
@@ -107,7 +106,7 @@ public class ValkyrieEntity extends PathfinderMob {
 		this.goalSelector.addGoal(7, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Mob.class, 10, true, false, this::isHostileTarget));
-		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Villager.class, 10, true, false, entity -> entity instanceof Villager villager && isOwnChildVillager(villager)));
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Villager.class, 10, true, false, entity -> entity instanceof Villager villager && isOwnChosenChildVillager(villager)));
 	}
 
 	@Override
@@ -190,7 +189,7 @@ public class ValkyrieEntity extends PathfinderMob {
 	@Override
 	public boolean killedEntity(ServerLevel level, LivingEntity killedEntity) {
 		boolean killed = super.killedEntity(level, killedEntity);
-		if (killedEntity instanceof Villager villager && isOwnChildVillager(villager)) {
+		if (killedEntity instanceof Villager villager && isOwnChosenChildVillager(villager)) {
 			convertVillagerToEinherjar(level, killedEntity);
 		}
 		return killed;
@@ -237,12 +236,15 @@ public class ValkyrieEntity extends PathfinderMob {
 		return target instanceof Enemy && target.isAlive() && target != this;
 	}
 
-	private boolean isOwnChildVillager(Villager villager) {
-		return villager.isAlive() && !villager.isBaby() && villager.getTags().contains(childTag());
+	private boolean isOwnChosenChildVillager(Villager villager) {
+		return villager.isAlive()
+			&& !villager.isBaby()
+			&& villager.getTags().contains(childTag())
+			&& villager.getTags().contains(GungnirMod.VALKYRIE_CHOSEN_CHILD_TAG);
 	}
 
 	private String childTag() {
-		return CHILD_OF_VALKYRIE_TAG_PREFIX + this.getUUID();
+		return GungnirMod.VALKYRIE_CHILD_TAG_PREFIX + this.getUUID();
 	}
 
 	private void chooseStrongEinherjar() {

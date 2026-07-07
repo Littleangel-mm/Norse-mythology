@@ -25,6 +25,11 @@ import org.slf4j.LoggerFactory;
 public class GungnirMod implements ModInitializer {
 	public static final String MOD_ID = "gungnir";
 	public static final String BLEEDING_TAG = MOD_ID + ".bleeding";
+	public static final String VALKYRIE_CHILD_TAG_PREFIX = MOD_ID + ".valkyrie_child.";
+	public static final String VALKYRIE_CHOSEN_CHILD_TAG = MOD_ID + ".valkyrie_chosen_child";
+	public static final String DIVINE_VILLAGER_TAG = MOD_ID + ".divine_villager";
+	public static final String DIVINE_BUILDER_TAG = MOD_ID + ".divine_builder";
+	public static final String DIVINE_VILLAGE_BUILT_TAG = MOD_ID + ".divine_village_built";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	public static final MobEffect BLEEDING = Registry.register(
